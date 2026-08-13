@@ -1,0 +1,66 @@
+{
+  "projectInfo": {
+    "cutoff": "2026-08-11",
+    "categories": "Steel Structure / EQT Erection / Shop Welding / Field Welding / Cable Elec & Inst"
+  },
+  "dailyKeyActivities": [],
+  "welderStatus": [
+    { "Group": "JCC Received", "Plan": "308", "Actual": "215", "Var.": "-93" },
+    { "Group": "JCC under Approval", "Plan": "27", "Actual": "6", "Var.": "-21" }
+  ],
+  "disciplines": [
+    { "name": "Steel Structure", "total": 12129, "completed": 9991, "remaining": 2138, "dailyPlan": 37, "dailyActual": 27, "dailyVar": -10, "cumPlan": 9775, "cumActual": 9991, "cumVar": 217, "mpPlan": 620, "mpActual": 522, "status": "Ahead" },
+    { "name": "Equipment Erection", "total": 369, "completed": 96, "remaining": 273, "dailyPlan": 7, "dailyActual": 0, "dailyVar": -7, "cumPlan": 208, "cumActual": 96, "cumVar": -112, "mpPlan": 128, "mpActual": 99, "status": "Behind" },
+    { "name": "Shop Welding", "total": 351974, "completed": 325691, "remaining": 26283, "dailyPlan": 679, "dailyActual": 335, "dailyVar": -344, "cumPlan": 340432, "cumActual": 325691, "cumVar": -14741, "mpPlan": 76, "mpActual": 55, "status": "Behind" },
+    { "name": "Spool Release", "total": 28633, "completed": 20630, "remaining": 8003, "dailyPlan": 167, "dailyActual": 33, "dailyVar": -134, "cumPlan": 24643, "cumActual": 20630, "cumVar": -4013, "mpPlan": null, "mpActual": null, "status": "Behind" },
+    { "name": "Spool Delivery", "total": 28633, "completed": 16353, "remaining": 12280, "dailyPlan": 254, "dailyActual": 11, "dailyVar": -243, "cumPlan": 21135, "cumActual": 16353, "cumVar": -4782, "mpPlan": null, "mpActual": null, "status": "Behind" },
+    { "name": "Field Weld", "total": 255383, "completed": 62148, "remaining": 193235, "dailyPlan": 1165, "dailyActual": 1009, "dailyVar": -156, "cumPlan": 65230, "cumActual": 62148, "cumVar": -3083, "mpPlan": 308, "mpActual": 117, "status": "Behind" },
+    { "name": "Pressure Test", "total": 1661, "completed": 0, "remaining": 1661, "dailyPlan": 0.3, "dailyActual": 0, "dailyVar": -0.3, "cumPlan": 0, "cumActual": 0, "cumVar": 0, "mpPlan": null, "mpActual": null, "status": "Behind" },
+    { "name": "Reinstatement", "total": 1661, "completed": 0, "remaining": 1661, "dailyPlan": 0, "dailyActual": 0, "dailyVar": 0, "cumPlan": 0, "cumActual": 0, "cumVar": 0, "mpPlan": null, "mpActual": null, "status": "Yet" },
+    { "name": "Cable Pulling - ELEC", "total": 585503, "completed": 57197, "remaining": 528306, "dailyPlan": 3020, "dailyActual": 90, "dailyVar": -2930, "cumPlan": 96554, "cumActual": 57197, "cumVar": -39357, "mpPlan": 334, "mpActual": 247, "status": "Behind" },
+    { "name": "Cable Pulling - INST", "total": 384693, "completed": 44334, "remaining": 340359, "dailyPlan": 724, "dailyActual": 720, "dailyVar": -4, "cumPlan": 24751, "cumActual": 44334, "cumVar": 19583, "mpPlan": 277, "mpActual": 223, "status": "Ahead" },
+    { "name": "Loop Test", "total": 10130, "completed": 0, "remaining": 10130, "dailyPlan": 0, "dailyActual": 0, "dailyVar": 0, "cumPlan": 0, "cumActual": 0, "cumVar": 0, "mpPlan": null, "mpActual": null, "status": "Yet" }
+  ],
+  "issueSummary": [
+    { "discipline": "Civil", "total": 3, "done": 0, "open": 3 },
+    { "discipline": "Architecture", "total": 1, "done": 0, "open": 1 },
+    { "discipline": "Steel Structure", "total": 3, "done": 1, "open": 2 },
+    { "discipline": "Mechanical", "total": 5, "done": 1, "open": 4 },
+    { "discipline": "Piping", "total": 9, "done": 3, "open": 6 },
+    { "discipline": "Electrical", "total": 3, "done": 0, "open": 3 },
+    { "discipline": "Instrument", "total": 2, "done": 0, "open": 2 },
+    { "discipline": "QC", "total": 1, "done": 0, "open": 1 },
+    { "discipline": "IM", "total": 4, "done": 2, "open": 2 },
+    { "discipline": "CPM", "total": 1, "done": 1, "open": 0 },
+    { "discipline": "All", "total": 1, "done": 0, "open": 1 }
+  ],
+  "issueList": [
+    { "no": 2, "unit": "All", "title": "PKG4 Cat IV Fence in west", "discipline": "IM", "dueDate": "2026-07-15", "status": "Open" },
+    { "no": 4, "unit": "All", "title": "PKG4 Overbridge in Train 7", "discipline": "IM", "dueDate": "2026-07-15", "status": "Open" },
+    { "no": 6, "unit": "All", "title": "SCOT Regenerator Dress-up (Train 7)", "discipline": "Mechanical", "dueDate": "2026-08-10", "status": "Open" },
+    { "no": 8, "unit": "All", "title": "Refractory Lining for Incinerator Stack (Train 7)", "discipline": "Mechanical", "dueDate": "2026-09-14", "status": "Open" },
+    { "no": 9, "unit": "All", "title": "Incinerator Stack Delivery (Train 8/9)", "discipline": "Mechanical", "dueDate": "2026-08-22", "status": "Open" },
+    { "no": 10, "unit": "All", "title": "Site Constraints for Equipment Operations Due to Interface Issue", "discipline": "All", "dueDate": "2026-09-30", "status": "Open" },
+    { "no": 11, "unit": "All", "title": "Sulfur Pit Lining Schedule", "discipline": "Civil / Piping", "dueDate": "2026-08-15", "status": "Open" },
+    { "no": 13, "unit": "All", "title": "Solvent Trench Schedule Monitoring", "discipline": "Civil", "dueDate": "2026-09-28", "status": "Open" },
+    { "no": 15, "unit": "All", "title": "Critical Milestone for Completion of All P/R", "discipline": "Steel Structure", "dueDate": "2026-08-31", "status": "Open" }
+  ],
+  "walkthroughSummary": [
+    { "responsibility": "SFEC", "total": 136, "done": 67, "open": 69 },
+    { "responsibility": "NBTC", "total": 127, "done": 78, "open": 49 },
+    { "responsibility": "Raymond", "total": 45, "done": 25, "open": 20 },
+    { "responsibility": "KAEFER", "total": 5, "done": 0, "open": 5 },
+    { "responsibility": "CGA", "total": 23, "done": 18, "open": 5 },
+    { "responsibility": "GS", "total": 7, "done": 0, "open": 7 },
+    { "responsibility": "COMPANY", "total": 1, "done": 0, "open": 1 }
+  ],
+  "walkthroughList": [
+    { "no": 15, "unit": "Train 9", "date": "2026-06-03", "item": "T9 - Piping Work", "responsibility": "NBTC", "dueDate": "2026-06-09", "status": "Ongoing" },
+    { "no": 16, "unit": "Train 9", "date": "2026-06-03", "item": "T9 - TS001 installation of handrails", "responsibility": "NBTC/SFEC", "dueDate": "2026-07-08", "status": "Ongoing" },
+    { "no": 29, "unit": "Train 8", "date": "2026-06-04", "item": "TS-003 Steel Structure", "responsibility": "NBTC/SFEC", "dueDate": "2026-06-07", "status": "Latest update" },
+    { "no": 41, "unit": "Train 8", "date": "2026-06-04", "item": "U/G MDEA line work and Trench Coating Work", "responsibility": "NBTC", "dueDate": "2026-06-10", "status": "-" },
+    { "no": 59, "unit": "Train 8", "date": "2026-06-11", "item": "TS001 - Handrail", "responsibility": "NBTC", "dueDate": "2026-07-15", "status": "To be continued" },
+    { "no": 60, "unit": "Train 8", "date": "2026-06-11", "item": "SFEC to finish coating for pipe trench", "responsibility": "SFEC", "dueDate": "2026-06-18", "status": "Ongoing" },
+    { "no": 61, "unit": "Train 8", "date": "2026-06-11", "item": "Backfill", "responsibility": "SFEC", "dueDate": "2026-06-13", "status": "Started Jul 5" }
+  ]
+}

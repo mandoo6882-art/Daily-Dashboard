@@ -1,0 +1,691 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Dashboard 데이터 업데이트 (담당자용)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  body { font-family: "Segoe UI","Malgun Gothic",Arial,sans-serif; background:#f4f6f9; color:#1c2733; max-width:900px; margin:0 auto; padding:24px; }
+  h1 { font-size:20px; color:#1f3864; }
+  .step { background:#fff; border:1px solid #dfe3ea; border-radius:10px; padding:16px 18px; margin-bottom:16px; }
+  .step h2 { font-size:15px; margin:0 0 10px 0; color:#1f3864; }
+  input[type=file] { font-size:13px; }
+  button { background:#4472c4; color:#fff; border:none; padding:9px 16px; border-radius:6px; font-size:13.5px; cursor:pointer; }
+  button:disabled { background:#b7c3dd; cursor:not-allowed; }
+  button:hover:not(:disabled) { background:#2e5395; }
+  .msg { font-size:13px; margin-top:10px; padding:8px 10px; border-radius:6px; }
+  .msg.ok { background:#e2f3e8; color:#2e7d4f; }
+  .msg.warn { background:#fbeecb; color:#8a6100; }
+  .msg.err { background:#fbe1e1; color:#c0392b; }
+  pre { background:#0f1b2d; color:#d6e2f5; padding:12px; border-radius:8px; font-size:11.5px; max-height:360px; overflow:auto; }
+  .note { font-size:12.5px; color:#6b7686; }
+</style>
+</head>
+<body>
+  <h1>Daily Progress Dashboard - 데이터 업데이트</h1>
+  <p class="note">
+    매일 작업 후, 저장한 엑셀 파일을 여기서 선택하고 <b>게시</b> 버튼만 누르면 웹 대시보드가 자동으로 최신 데이터로 갱신됩니다.
+    (최초 1번만 아래 "0. 연결 설정"을 채워두면 그 다음부터는 매번 다시 입력할 필요 없음 — 이 브라우저에 저장됨)
+  </p>
+
+  <div class="step">
+    <h2 id="settingsToggle" style="cursor:pointer;">0. 연결 설정 (최초 1회만) ▾</h2>
+    <div id="settingsBody">
+      <p class="note">GitHub 저장소 정보를 입력하면, 게시 버튼 클릭 시 그 저장소의 data.json이 자동으로 갱신되고 Vercel/Netlify가 자동 재배포합니다.</p>
+      <label class="note">GitHub 사용자/조직명<br><input type="text" id="ghOwner" placeholder="예: myaccount" style="width:100%;padding:6px;margin:4px 0 10px;"></label>
+      <label class="note">저장소 이름<br><input type="text" id="ghRepo" placeholder="예: daily-progress-dashboard" style="width:100%;padding:6px;margin:4px 0 10px;"></label>
+      <label class="note">브랜치<br><input type="text" id="ghBranch" placeholder="main" style="width:100%;padding:6px;margin:4px 0 10px;"></label>
+      <label class="note">Personal Access Token<br><input type="password" id="ghToken" placeholder="ghp_..." style="width:100%;padding:6px;margin:4px 0 10px;"></label>
+      <button id="saveSettingsBtn">설정 저장</button>
+      <span id="settingsMsg" class="note"></span>
+    </div>
+  </div>
+
+  <div class="step">
+    <h2>1. 엑셀 파일 선택</h2>
+    <input type="file" id="fileInput" accept=".xlsx,.xls" />
+    <div id="loadMsg"></div>
+  </div>
+
+  <div class="step">
+    <h2>2. 인식 결과 확인</h2>
+    <div id="parseMsgs"></div>
+    <pre id="preview">파일을 선택하면 여기에 미리보기가 표시됩니다.</pre>
+  </div>
+
+  <div class="step">
+    <h2>2-1. Issue/Walkthrough가 제대로 안 보일 때 (디버그)</h2>
+    <p class="note">아래 버튼을 누르면 "Issue"/"Walkthrough" 시트의 실제 내용을 그대로 텍스트로 보여줍니다. 자동 인식이 안 될 때, 이 텍스트를 복사해서 Claude에게 보내주면 정확히 고칠 수 있어요.</p>
+    <button id="debugBtn" disabled>Issue/Walkthrough 시트 원본 보기</button>
+    <pre id="debugOutput" style="display:none;"></pre>
+  </div>
+
+  <div class="step">
+    <h2>3. 게시</h2>
+    <button id="publishBtn" disabled>🚀 웹사이트에 게시</button>
+    <button id="downloadBtn" disabled>data.json 파일로 저장 (수동용)</button>
+    <div id="publishMsg"></div>
+    <p class="note">"연결 설정"을 채워두지 않았다면 게시 버튼 대신 다운로드 버튼을 써서 수동으로 올려야 합니다.</p>
+  </div>
+
+<script>
+let parsedData = null;
+let currentWorkbook = null;
+
+function norm(s) {
+  return String(s == null ? "" : s).toLowerCase().replace(/\./g, "").replace(/\s+/g, " ").trim();
+}
+function toNum(v) {
+  if (v == null || v === "" || v === "-") return 0;
+  const n = parseFloat(String(v).replace(/,/g, ""));
+  return isNaN(n) ? 0 : n;
+}
+function toNumOrNull(v) {
+  if (v == null || v === "" || v === "-") return null;
+  const n = parseFloat(String(v).replace(/,/g, ""));
+  return isNaN(n) ? null : n;
+}
+function statusFromCell(v) {
+  const t = norm(v);
+  if (t.includes("ahead")) return "Ahead";
+  if (t.includes("behind")) return "Behind";
+  if (t.includes("yet")) return "Yet";
+  return "Behind";
+}
+function findRowIndexContaining(rows, target) {
+  for (let r = 0; r < rows.length; r++) {
+    if (rows[r].map(norm).includes(target)) return r;
+  }
+  return -1;
+}
+function findColAfter(row, target, fromCol) {
+  for (let c = Math.max(fromCol, 0); c < row.length; c++) {
+    if (norm(row[c]) === target) return c;
+  }
+  return -1;
+}
+
+function addMsg(text, cls) {
+  const div = document.createElement("div");
+  div.className = "msg " + cls;
+  div.textContent = text;
+  document.getElementById("parseMsgs").appendChild(div);
+}
+
+function parseProgressTable(rows) {
+  const requiredCols = ["total", "completed", "remaining", "daily plan", "daily actual"];
+  let headerRow = -1;
+  for (let r = 0; r < rows.length; r++) {
+    const norms = rows[r].map(norm);
+    if (requiredCols.every(h => norms.includes(h))) { headerRow = r; break; }
+  }
+  if (headerRow === -1) {
+    addMsg("Progress Status 표를 찾지 못했습니다 (Total/Completed/Remaining/Daily Plan/Daily Actual 헤더 필요). 이전 데이터를 유지합니다.", "err");
+    return null;
+  }
+  const norms = rows[headerRow].map(norm);
+  const cols = {
+    total: norms.indexOf("total"),
+    completed: norms.indexOf("completed"),
+    remaining: norms.indexOf("remaining"),
+    dailyPlan: norms.indexOf("daily plan"),
+    dailyActual: norms.indexOf("daily actual"),
+    dailyVar: norms.indexOf("daily var"),
+    cumPlan: norms.indexOf("cum plan"),
+    cumActual: norms.indexOf("cum actual"),
+    cumVar: norms.indexOf("cum var"),
+    mpPlan: norms.indexOf("mp plan"),
+    mpActual: norms.indexOf("mp actual"),
+    status: norms.indexOf("status")
+  };
+  const nameCol = Math.max(cols.total - 1, 0);
+  const out = [];
+  for (let r = headerRow + 1; r < rows.length; r++) {
+    const nameVal = rows[r][nameCol];
+    if (nameVal == null || String(nameVal).trim() === "") break;
+    out.push({
+      name: String(nameVal).trim(),
+      total: toNum(rows[r][cols.total]),
+      completed: toNum(rows[r][cols.completed]),
+      remaining: toNum(rows[r][cols.remaining]),
+      dailyPlan: toNum(rows[r][cols.dailyPlan]),
+      dailyActual: toNum(rows[r][cols.dailyActual]),
+      dailyVar: cols.dailyVar >= 0 ? toNum(rows[r][cols.dailyVar]) : 0,
+      cumPlan: cols.cumPlan >= 0 ? toNum(rows[r][cols.cumPlan]) : 0,
+      cumActual: cols.cumActual >= 0 ? toNum(rows[r][cols.cumActual]) : 0,
+      cumVar: cols.cumVar >= 0 ? toNum(rows[r][cols.cumVar]) : 0,
+      mpPlan: cols.mpPlan >= 0 ? toNumOrNull(rows[r][cols.mpPlan]) : null,
+      mpActual: cols.mpActual >= 0 ? toNumOrNull(rows[r][cols.mpActual]) : null,
+      status: cols.status >= 0 ? statusFromCell(rows[r][cols.status]) : "Behind"
+    });
+  }
+  if (out.length === 0) {
+    addMsg("Progress Status 표 헤더는 찾았지만 데이터 행을 읽지 못했습니다.", "warn");
+    return null;
+  }
+  addMsg(`Progress Status: ${out.length}개 항목 인식 완료`, "ok");
+  return out;
+}
+
+function parseSummaryTables(rows) {
+  const sharedRow = findRowIndexContaining(rows, "discipline");
+  if (sharedRow === -1) {
+    addMsg("Issue/Walkthrough 요약 표를 찾지 못했습니다. 이전 데이터를 유지합니다.", "err");
+    return { issueSummary: null, walkthroughSummary: null };
+  }
+  const row = rows[sharedRow];
+  const discCol = findColAfter(row, "discipline", 0);
+  const respCol = findColAfter(row, "responsibility", discCol + 1);
+  const issueTotalCol = findColAfter(row, "total", discCol + 1);
+  const issueDoneCol = findColAfter(row, "done", issueTotalCol + 1);
+  const issueOpenCol = findColAfter(row, "open", issueDoneCol + 1);
+
+  let issueSummary = null;
+  if (issueTotalCol >= 0 && issueDoneCol >= 0 && issueOpenCol >= 0) {
+    issueSummary = [];
+    for (let r = sharedRow + 1; r < rows.length; r++) {
+      const nameVal = rows[r][discCol];
+      if (nameVal == null || String(nameVal).trim() === "" || norm(nameVal) === "total") break;
+      issueSummary.push({
+        discipline: String(nameVal).trim(),
+        total: toNum(rows[r][issueTotalCol]),
+        done: toNum(rows[r][issueDoneCol]),
+        open: toNum(rows[r][issueOpenCol])
+      });
+    }
+    addMsg(`Issue 요약: ${issueSummary.length}개 discipline 인식 완료`, "ok");
+  } else {
+    addMsg("Issue 요약 표 컬럼(Total/Done/Open)을 찾지 못했습니다.", "warn");
+  }
+
+  let walkthroughSummary = null;
+  if (respCol >= 0) {
+    const wtTotalCol = findColAfter(row, "total", respCol + 1);
+    const wtDoneCol = findColAfter(row, "done", wtTotalCol + 1);
+    const wtOpenCol = findColAfter(row, "open", wtDoneCol + 1);
+    if (wtTotalCol >= 0 && wtDoneCol >= 0 && wtOpenCol >= 0) {
+      walkthroughSummary = [];
+      for (let r = sharedRow + 1; r < rows.length; r++) {
+        const nameVal = rows[r][respCol];
+        if (nameVal == null || String(nameVal).trim() === "" || norm(nameVal) === "total") break;
+        walkthroughSummary.push({
+          responsibility: String(nameVal).trim(),
+          total: toNum(rows[r][wtTotalCol]),
+          done: toNum(rows[r][wtDoneCol]),
+          open: toNum(rows[r][wtOpenCol])
+        });
+      }
+      addMsg(`Walkthrough 요약: ${walkthroughSummary.length}개 responsibility 인식 완료`, "ok");
+    } else {
+      addMsg("Walkthrough 요약 표 컬럼(Total/Done/Open)을 찾지 못했습니다.", "warn");
+    }
+  } else {
+    addMsg("Walkthrough 요약 표(Responsibility 헤더)를 찾지 못했습니다.", "warn");
+  }
+
+  return { issueSummary, walkthroughSummary };
+}
+
+function findFlexibleHeader(rows, aliasGroups, maxScanRows) {
+  // aliasGroups: { key: [alias1, alias2, ...] }
+  let best = { rowIdx: -1, colMap: {}, score: -1 };
+  const limit = Math.min(rows.length, maxScanRows || 15);
+  for (let r = 0; r < limit; r++) {
+    const norms = rows[r].map(norm);
+    const colMap = {};
+    let score = 0;
+    for (const key in aliasGroups) {
+      let foundCol = -1;
+      for (const alias of aliasGroups[key]) {
+        const idx = norms.indexOf(norm(alias));
+        if (idx >= 0) { foundCol = idx; break; }
+      }
+      if (foundCol >= 0) { colMap[key] = foundCol; score++; }
+    }
+    if (score > best.score) best = { rowIdx: r, colMap, score };
+  }
+  return best;
+}
+
+function isClosed(statusText) {
+  const t = norm(statusText);
+  return t.includes("closed") || t.includes("complete") || t.includes("done");
+}
+
+function parseIssueSheet(wb) {
+  const sheetName = wb.SheetNames.find(n => norm(n) === "issue");
+  if (!sheetName) {
+    addMsg('"Issue" 시트를 찾지 못했습니다.', "warn");
+    return null;
+  }
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: "" });
+  const aliasGroups = {
+    no: ["no", "no.", "item no", "issue no"],
+    unit: ["unit", "train", "area"],
+    discipline: ["discipline"],
+    title: ["title", "description", "issue", "item", "remarks"],
+    dueDate: ["due date", "duedate", "date"],
+    status: ["status"]
+  };
+  const best = findFlexibleHeader(rows, aliasGroups, 15);
+  if (best.rowIdx === -1 || best.score < 3 || best.colMap.status == null) {
+    addMsg('"Issue" 시트에서 표 헤더를 찾지 못했습니다 (No/Discipline/Title/Due Date/Status 필요). 이전 값을 유지합니다.', "warn");
+    return null;
+  }
+  const cols = best.colMap;
+  const anchorCol = cols.no != null ? cols.no : cols.status;
+  const out = [];
+  let excluded = 0;
+  for (let r = best.rowIdx + 1; r < rows.length; r++) {
+    const anchorVal = rows[r][anchorCol];
+    const rowIsEmpty = rows[r].every(c => String(c).trim() === "");
+    if (rowIsEmpty) break;
+    if (anchorVal == null || String(anchorVal).trim() === "") continue;
+    const statusVal = cols.status != null ? rows[r][cols.status] : "";
+    if (isClosed(statusVal)) { excluded++; continue; }
+    out.push({
+      no: cols.no != null ? rows[r][cols.no] : out.length + 1,
+      unit: cols.unit != null ? String(rows[r][cols.unit]).trim() : "",
+      title: cols.title != null ? String(rows[r][cols.title]).trim() : "",
+      discipline: cols.discipline != null ? String(rows[r][cols.discipline]).trim() : "",
+      dueDate: cols.dueDate != null ? String(rows[r][cols.dueDate]).trim() : "",
+      status: cols.status != null ? String(rows[r][cols.status]).trim() : ""
+    });
+  }
+  if (out.length === 0) {
+    addMsg('"Issue" 시트 헤더는 찾았지만 표시할 항목이 없습니다 (모두 Closed 이거나 데이터 없음).', "warn");
+    return [];
+  }
+  addMsg(`Issue 상세 목록: ${out.length}건 인식 완료 (Closed ${excluded}건 제외)`, "ok");
+  return out;
+}
+
+function parseWalkthroughSheet(wb) {
+  const sheetName = wb.SheetNames.find(n => norm(n) === "walkthrough");
+  if (!sheetName) {
+    addMsg('"Walkthrough" 시트를 찾지 못했습니다.', "warn");
+    return null;
+  }
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: "" });
+  const aliasGroups = {
+    no: ["no", "no."],
+    unit: ["unit", "train", "area"],
+    date: ["date", "found date"],
+    item: ["item", "description", "title"],
+    responsibility: ["responsibility", "responsible"],
+    dueDate: ["due date", "duedate"],
+    status: ["status"]
+  };
+  const best = findFlexibleHeader(rows, aliasGroups, 15);
+  if (best.rowIdx === -1 || best.score < 3 || best.colMap.status == null) {
+    addMsg('"Walkthrough" 시트에서 표 헤더를 찾지 못했습니다 (No/Responsibility/Item/Due Date/Status 필요). 이전 값을 유지합니다.', "warn");
+    return null;
+  }
+  const cols = best.colMap;
+  const anchorCol = cols.no != null ? cols.no : cols.status;
+  const out = [];
+  let excluded = 0;
+  for (let r = best.rowIdx + 1; r < rows.length; r++) {
+    const anchorVal = rows[r][anchorCol];
+    const rowIsEmpty = rows[r].every(c => String(c).trim() === "");
+    if (rowIsEmpty) break;
+    if (anchorVal == null || String(anchorVal).trim() === "") continue;
+    const statusVal = cols.status != null ? rows[r][cols.status] : "";
+    if (isClosed(statusVal)) { excluded++; continue; }
+    out.push({
+      no: cols.no != null ? rows[r][cols.no] : out.length + 1,
+      unit: cols.unit != null ? String(rows[r][cols.unit]).trim() : "",
+      item: cols.item != null ? String(rows[r][cols.item]).trim() : "",
+      responsibility: cols.responsibility != null ? String(rows[r][cols.responsibility]).trim() : "",
+      dueDate: cols.dueDate != null ? String(rows[r][cols.dueDate]).trim() : "",
+      status: cols.status != null ? String(rows[r][cols.status]).trim() : ""
+    });
+  }
+  if (out.length === 0) {
+    addMsg('"Walkthrough" 시트 헤더는 찾았지만 표시할 항목이 없습니다 (모두 Closed 이거나 데이터 없음).', "warn");
+    return [];
+  }
+  addMsg(`Walkthrough 상세 목록: ${out.length}건 인식 완료 (Closed ${excluded}건 제외)`, "ok");
+  return out;
+}
+
+function findLabelRow(rows, labelSubstring, maxScanRows) {
+  const target = norm(labelSubstring);
+  const limit = Math.min(rows.length, maxScanRows || rows.length);
+  for (let r = 0; r < limit; r++) {
+    for (let c = 0; c < rows[r].length; c++) {
+      if (norm(rows[r][c]).includes(target)) return { row: r, col: c };
+    }
+  }
+  return null;
+}
+
+function parseGenericTableAfterLabel(rows, labelSubstring) {
+  const loc = findLabelRow(rows, labelSubstring);
+  if (!loc) return null;
+  let headerRowIdx = -1;
+  for (let r = loc.row + 1; r < Math.min(loc.row + 10, rows.length); r++) {
+    const nonEmpty = rows[r].filter(c => String(c).trim() !== "").length;
+    if (nonEmpty >= 2) { headerRowIdx = r; break; }
+  }
+  if (headerRowIdx === -1) return null;
+  const headerRow = rows[headerRowIdx];
+  let startCol = headerRow.findIndex(c => String(c).trim() !== "");
+  if (startCol === -1) return null;
+  let endCol = headerRow.length - 1;
+  while (endCol > startCol && String(headerRow[endCol]).trim() === "") endCol--;
+  const headers = [];
+  for (let c = startCol; c <= endCol; c++) headers.push(String(headerRow[c] || ("Col" + c)).trim());
+
+  const out = [];
+  for (let r = headerRowIdx + 1; r < rows.length; r++) {
+    const rowVals = headers.map((h, i) => rows[r][startCol + i]);
+    const rowIsEmpty = rowVals.every(v => String(v == null ? "" : v).trim() === "");
+    if (rowIsEmpty) break;
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = String(rowVals[i] == null ? "" : rowVals[i]).trim(); });
+    out.push(obj);
+  }
+  return out.length ? out : null;
+}
+
+function parseWelderTable(rows) {
+  const loc = findLabelRow(rows, "welder mobilization status");
+  if (!loc) return null;
+
+  let subHeaderRow = -1;
+  for (let r = loc.row + 1; r < Math.min(loc.row + 10, rows.length); r++) {
+    const norms = rows[r].map(norm);
+    if (norms.includes("plan") && norms.includes("actual")) { subHeaderRow = r; break; }
+  }
+  if (subHeaderRow === -1) return null;
+  const subRow = rows[subHeaderRow];
+
+  let groupRow = null;
+  for (let r = subHeaderRow - 1; r > loc.row; r--) {
+    if (rows[r].some(c => String(c).trim() !== "")) { groupRow = rows[r]; break; }
+  }
+
+  const planCols = [];
+  subRow.forEach((c, i) => { if (norm(c) === "plan") planCols.push(i); });
+  if (planCols.length === 0) return null;
+
+  let dataRow = null;
+  for (let r = subHeaderRow + 1; r < Math.min(subHeaderRow + 5, rows.length); r++) {
+    if (rows[r].some(c => String(c).trim() !== "")) { dataRow = rows[r]; break; }
+  }
+  if (!dataRow) return null;
+
+  const out = [];
+  planCols.forEach((pc, idx) => {
+    const actualCol = pc + 1, varCol = pc + 2;
+    let groupName = "Group " + (idx + 1);
+    if (groupRow) {
+      for (let c = pc; c >= 0; c--) {
+        if (String(groupRow[c]).trim() !== "") { groupName = String(groupRow[c]).trim(); break; }
+      }
+    }
+    out.push({
+      "Group": groupName,
+      "Plan": String(dataRow[pc] == null ? "" : dataRow[pc]).trim(),
+      "Actual": String(dataRow[actualCol] == null ? "" : dataRow[actualCol]).trim(),
+      "Var.": String(dataRow[varCol] == null ? "" : dataRow[varCol]).trim()
+    });
+  });
+  return out.length ? out : null;
+}
+
+function parseActivitiesListAfterLabel(rows, labelSubstring) {
+  const loc = findLabelRow(rows, labelSubstring);
+  if (!loc) return null;
+  const out = [];
+  for (let r = loc.row + 1; r < Math.min(loc.row + 20, rows.length); r++) {
+    const cellsNonEmpty = rows[r].filter(c => String(c).trim() !== "");
+    if (cellsNonEmpty.length === 0) {
+      if (out.length > 0) break;
+      continue;
+    }
+    const combined = cellsNonEmpty.join(" ").trim();
+    if (combined.startsWith("■")) break;
+    out.push(combined);
+  }
+  return out.length ? out : null;
+}
+
+async function getPreviousData() {
+  try {
+    const res = await fetch("./data.json", { cache: "no-store" });
+    if (res.ok) return await res.json();
+  } catch (e) {}
+  return null;
+}
+
+document.getElementById("fileInput").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  document.getElementById("parseMsgs").innerHTML = "";
+  document.getElementById("loadMsg").textContent = "읽는 중...";
+  document.getElementById("downloadBtn").disabled = true;
+  document.getElementById("publishBtn").disabled = true;
+  document.getElementById("publishMsg").innerHTML = "";
+  document.getElementById("debugBtn").disabled = true;
+  document.getElementById("debugOutput").style.display = "none";
+
+  try {
+    if (typeof XLSX === "undefined") {
+      throw new Error("XLSX 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하거나, 이 파일을 로컬 웹 서버로 열어서 다시 시도해 주세요 (file:// 로 직접 열면 브라우저가 외부 스크립트를 막을 수 있습니다).");
+    }
+
+    const buf = await file.arrayBuffer();
+    const wb = XLSX.read(buf, { type: "array" });
+    currentWorkbook = wb;
+    document.getElementById("debugBtn").disabled = false;
+    const sheetName = wb.SheetNames.find(n => norm(n) === "dashboard") || wb.SheetNames[0];
+    const ws = wb.Sheets[sheetName];
+    const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+
+    document.getElementById("loadMsg").textContent = `"${sheetName}" 시트를 읽었습니다 (${rows.length}행). [시트 목록: ${wb.SheetNames.join(", ")}]`;
+
+    const previous = await getPreviousData();
+    const disciplines = parseProgressTable(rows);
+    const { issueSummary, walkthroughSummary } = parseSummaryTables(rows);
+    const issueList = parseIssueSheet(wb);
+    const walkthroughList = parseWalkthroughSheet(wb);
+    const welderStatus = parseWelderTable(rows);
+    const dailyKeyActivities = parseActivitiesListAfterLabel(rows, "daily key activities");
+
+    parsedData = {
+      projectInfo: (previous && previous.projectInfo) || { cutoff: "", categories: "" },
+      dailyKeyActivities: dailyKeyActivities || (previous && previous.dailyKeyActivities) || [],
+      welderStatus: welderStatus || (previous && previous.welderStatus) || [],
+      disciplines: disciplines || (previous && previous.disciplines) || [],
+      issueSummary: issueSummary || (previous && previous.issueSummary) || [],
+      issueList: issueList || (previous && previous.issueList) || [],
+      walkthroughSummary: walkthroughSummary || (previous && previous.walkthroughSummary) || [],
+      walkthroughList: walkthroughList || (previous && previous.walkthroughList) || []
+    };
+
+    if (!disciplines) addMsg("Progress Status는 이전 data.json 값을 그대로 유지했습니다.", "warn");
+    if (!issueSummary) addMsg("Issue 요약은 이전 data.json 값을 그대로 유지했습니다.", "warn");
+    if (!walkthroughSummary) addMsg("Walkthrough 요약은 이전 data.json 값을 그대로 유지했습니다.", "warn");
+    if (!issueList) addMsg("Issue 상세 목록은 이전 data.json 값을 그대로 유지했습니다.", "warn");
+    if (!walkthroughList) addMsg("Walkthrough 상세 목록은 이전 data.json 값을 그대로 유지했습니다.", "warn");
+    if (welderStatus) addMsg(`Welder Mobilization Status: ${welderStatus.length}행 인식 완료`, "ok");
+    else addMsg('"Welder Mobilization Status" 표를 찾지 못했습니다. 이전 값을 유지합니다.', "warn");
+    if (dailyKeyActivities) addMsg(`Daily Key Activities: ${dailyKeyActivities.length}개 항목 인식 완료`, "ok");
+    else addMsg('"Daily Key Activities" 항목을 찾지 못했습니다. 이전 값을 유지합니다.', "warn");
+
+    document.getElementById("preview").textContent = JSON.stringify(parsedData, null, 2);
+    document.getElementById("downloadBtn").disabled = false;
+    document.getElementById("publishBtn").disabled = false;
+  } catch (err) {
+    document.getElementById("loadMsg").textContent = "오류 발생";
+    addMsg("에러: " + (err && err.message ? err.message : String(err)), "err");
+    document.getElementById("preview").textContent = (err && err.stack) ? err.stack : String(err);
+    console.error(err);
+  }
+});
+
+function dumpSheet(wb, sheetName, maxRows, maxCols) {
+  const ws = wb.Sheets[sheetName];
+  if (!ws) return `[sheet "${sheetName}" not found]\n`;
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
+  let out = `--- Sheet: ${sheetName} (${rows.length} rows) ---\n`;
+  const rowLimit = Math.min(rows.length, maxRows);
+  for (let r = 0; r < rowLimit; r++) {
+    const colLimit = Math.min(rows[r].length, maxCols);
+    const cells = [];
+    for (let c = 0; c < colLimit; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const cellObj = ws[addr];
+      const val = rows[r][c];
+      let cellText = String(val == null ? "" : val).trim();
+      if (cellObj && cellObj.f) cellText += ` {fx=${cellObj.f}}`;
+      cells.push(cellText);
+    }
+    out += `[${r}] ` + cells.join(" | ") + "\n";
+  }
+  if (rows.length > rowLimit) out += `... (${rows.length - rowLimit} more rows not shown)\n`;
+  return out + "\n";
+}
+
+document.getElementById("debugBtn").addEventListener("click", () => {
+  if (!currentWorkbook) return;
+  const wb = currentWorkbook;
+  let out = `Sheet names: ${wb.SheetNames.join(", ")}\n\n`;
+  const issueSheetName = wb.SheetNames.find(n => norm(n) === "issue");
+  const wtSheetName = wb.SheetNames.find(n => norm(n) === "walkthrough");
+  const dashSheetName = wb.SheetNames.find(n => norm(n) === "dashboard") || wb.SheetNames[0];
+
+  const dashRows = XLSX.utils.sheet_to_json(wb.Sheets[dashSheetName], { header: 1, defval: "" });
+  const welderLoc = findLabelRow(dashRows, "welder mobilization status");
+  const activitiesLoc = findLabelRow(dashRows, "daily key activities");
+  out += `Label search in "${dashSheetName}" (${dashRows.length} total rows):\n`;
+  out += `  "welder mobilization status" -> ${welderLoc ? "found at row " + welderLoc.row + ", col " + welderLoc.col : "NOT FOUND"}\n`;
+  out += `  "daily key activities" -> ${activitiesLoc ? "found at row " + activitiesLoc.row + ", col " + activitiesLoc.col : "NOT FOUND"}\n\n`;
+
+  out += issueSheetName ? dumpSheet(wb, issueSheetName, 25, 15) : '[no "Issue" sheet found]\n\n';
+  out += wtSheetName ? dumpSheet(wb, wtSheetName, 25, 15) : '[no "Walkthrough" sheet found]\n\n';
+  out += dumpSheet(wb, dashSheetName, 200, 20);
+
+  const el = document.getElementById("debugOutput");
+  el.textContent = out;
+  el.style.display = "block";
+});
+
+document.getElementById("downloadBtn").addEventListener("click", () => {
+  const blob = new Blob([JSON.stringify(parsedData, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "data.json";
+  a.click();
+  URL.revokeObjectURL(url);
+});
+
+// ------------------------------------------------------------
+// 연결 설정 (GitHub 저장소로 자동 게시)
+// 이 브라우저의 localStorage에만 저장됨 (다른 곳으로 전송되지 않음, GitHub API 호출에만 사용)
+// ------------------------------------------------------------
+const SETTINGS_KEY = "dpd_admin_settings_v1";
+
+function loadSettings() {
+  try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"); } catch (e) { return {}; }
+}
+function saveSettingsToForm() {
+  const s = loadSettings();
+  document.getElementById("ghOwner").value = s.owner || "";
+  document.getElementById("ghRepo").value = s.repo || "";
+  document.getElementById("ghBranch").value = s.branch || "main";
+  document.getElementById("ghToken").value = s.token || "";
+}
+saveSettingsToForm();
+
+document.getElementById("settingsToggle").addEventListener("click", () => {
+  const body = document.getElementById("settingsBody");
+  body.style.display = body.style.display === "none" ? "block" : "none";
+});
+
+document.getElementById("saveSettingsBtn").addEventListener("click", () => {
+  const settings = {
+    owner: document.getElementById("ghOwner").value.trim(),
+    repo: document.getElementById("ghRepo").value.trim(),
+    branch: document.getElementById("ghBranch").value.trim() || "main",
+    token: document.getElementById("ghToken").value.trim()
+  };
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  document.getElementById("settingsMsg").textContent = "저장됨 ✓";
+  setTimeout(() => { document.getElementById("settingsMsg").textContent = ""; }, 2000);
+});
+
+function utf8ToBase64(str) {
+  return btoa(unescape(encodeURIComponent(str)));
+}
+
+async function publishToGitHub(jsonText) {
+  const s = loadSettings();
+  if (!s.owner || !s.repo || !s.token) {
+    throw new Error("연결 설정(0번)에 GitHub 사용자명/저장소명/토큰을 먼저 입력하고 저장해 주세요.");
+  }
+  const branch = s.branch || "main";
+  const apiBase = `https://api.github.com/repos/${s.owner}/${s.repo}/contents/data.json`;
+  const headers = {
+    "Authorization": "token " + s.token,
+    "Accept": "application/vnd.github+json"
+  };
+
+  let sha = undefined;
+  const getRes = await fetch(apiBase + "?ref=" + encodeURIComponent(branch), { headers });
+  if (getRes.ok) {
+    const info = await getRes.json();
+    sha = info.sha;
+  } else if (getRes.status !== 404) {
+    const errBody = await getRes.text();
+    throw new Error(`GitHub에서 기존 파일 정보를 가져오지 못했습니다 (${getRes.status}): ${errBody}`);
+  }
+
+  const body = {
+    message: "Update data.json - " + new Date().toISOString(),
+    content: utf8ToBase64(jsonText),
+    branch: branch
+  };
+  if (sha) body.sha = sha;
+
+  const putRes = await fetch(apiBase, {
+    method: "PUT",
+    headers: { ...headers, "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!putRes.ok) {
+    const errBody = await putRes.text();
+    throw new Error(`GitHub 업로드 실패 (${putRes.status}): ${errBody}`);
+  }
+  return true;
+}
+
+document.getElementById("publishBtn").addEventListener("click", async () => {
+  const msgEl = document.getElementById("publishMsg");
+  msgEl.innerHTML = "";
+  const btn = document.getElementById("publishBtn");
+  btn.disabled = true;
+  btn.textContent = "게시 중...";
+  try {
+    await publishToGitHub(JSON.stringify(parsedData, null, 2));
+    const div = document.createElement("div");
+    div.className = "msg ok";
+    div.textContent = "게시 완료! 1분 정도 후 대시보드 사이트를 새로고침하면 최신 데이터가 보입니다.";
+    msgEl.appendChild(div);
+  } catch (err) {
+    const div = document.createElement("div");
+    div.className = "msg err";
+    div.textContent = "게시 실패: " + (err && err.message ? err.message : String(err));
+    msgEl.appendChild(div);
+    console.error(err);
+  }
+  btn.disabled = false;
+  btn.textContent = "🚀 웹사이트에 게시";
+});
+</script>
+</body>
+</html>
