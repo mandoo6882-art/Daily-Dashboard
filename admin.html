@@ -328,6 +328,117 @@ function parseGenericSheetFull(wb, sheetName, label) {
   return { columns: headers, filterColumn: null, rows: kept, _statusCol: statusCol };
 }
 
+function formatMaybeExcelDateText(v) {
+  const s = String(v == null ? "" : v).trim();
+  if (/^\d{5}(\.\d+)?$/.test(s) && window.XLSX && XLSX.SSF && XLSX.SSF.parse_date_code) {
+    const d = XLSX.SSF.parse_date_code(parseFloat(s));
+    if (d && d.y) {
+      return `${d.y}-${String(d.m).padStart(2, "0")}-${String(d.d).padStart(2, "0")}`;
+    }
+  }
+  return s;
+}
+
+// Issue and Walkthrough live side by side on the Dashboard sheet itself, under
+// "▼ Filtered Issues" / "▼ Filtered Walkthrough Action Items" labels, already pre-filtered
+// to exclude Closed items by the sheet's own FILTER() formulas. Each side has its own
+// (unlabeled) "No" column one to the left of where its header block starts.
+function parseDashboardIssueWalkthrough(rows) {
+  const label = findLabelRow(rows, "filtered issues");
+  if (!label) {
+    addMsg('Dashboard 시트에서 "Filtered Issues" 라벨을 찾지 못했습니다.', "warn");
+    return { issueList: null, walkthroughList: null };
+  }
+
+  let headerRowIdx = -1;
+  for (let r = label.row + 1; r < Math.min(label.row + 5, rows.length); r++) {
+    if ((rows[r] || []).some(c => String(c).trim() !== "")) { headerRowIdx = r; break; }
+  }
+  if (headerRowIdx === -1) {
+    addMsg('"Filtered Issues" 아래 헤더 행을 찾지 못했습니다.', "warn");
+    return { issueList: null, walkthroughList: null };
+  }
+
+  const labelRow = rows[label.row] || [];
+  let issueAnchor = -1, wtAnchor = -1;
+  for (let c = 0; c < labelRow.length; c++) {
+    const t = norm(labelRow[c]);
+    if (issueAnchor === -1 && t.includes("filtered issue")) issueAnchor = c;
+    if (wtAnchor === -1 && t.includes("filtered walkthrough")) wtAnchor = c;
+  }
+  if (issueAnchor === -1 || wtAnchor === -1) {
+    addMsg('Issue/Walkthrough 블록 시작 열을 찾지 못했습니다.', "warn");
+    return { issueList: null, walkthroughList: null };
+  }
+
+  const headerRow = rows[headerRowIdx] || [];
+  let lastCol = headerRow.length - 1;
+  while (lastCol > wtAnchor && String(headerRow[lastCol] == null ? "" : headerRow[lastCol]).trim() === "") lastCol--;
+
+  const issueStartCol = Math.max(issueAnchor - 1, 0);
+  const wtStartCol = Math.max(wtAnchor - 1, 0);
+
+  function buildColumns(startCol, endCol) {
+    const cols = [];
+    for (let c = startCol; c <= endCol; c++) {
+      let h = String(headerRow[c] == null ? "" : headerRow[c]).trim();
+      if (h === "" && c === startCol) h = "No";
+      cols.push({ col: c, header: h });
+    }
+    return cols;
+  }
+
+  const issueCols = buildColumns(issueStartCol, wtStartCol - 1);
+  const wtCols = buildColumns(wtStartCol, lastCol);
+
+  function readGroup(cols) {
+    const keyCol = cols[0].col;
+    const out = [];
+    let blankStreak = 0;
+    for (let r = headerRowIdx + 1; r < rows.length; r++) {
+      const dataRow = rows[r] || [];
+      const keyVal = dataRow[keyCol];
+      if (keyVal == null || String(keyVal).trim() === "") {
+        blankStreak++;
+        if (blankStreak >= 3) break;
+        continue;
+      }
+      blankStreak = 0;
+      const obj = {};
+      cols.forEach(c => {
+        if (!c.header) return; // skip unlabeled spacer columns
+        obj[c.header] = formatMaybeExcelDateText(dataRow[c.col]);
+      });
+      out.push(obj);
+    }
+    return out;
+  }
+
+  const issueRows = readGroup(issueCols);
+  const wtRows = readGroup(wtCols);
+  const issueHeaders = issueCols.filter(c => c.header).map(c => c.header);
+  const wtHeaders = wtCols.filter(c => c.header).map(c => c.header);
+
+  const issueList = {
+    columns: issueHeaders,
+    filterColumn: guessColumn(issueHeaders, ["responsible", "responsibility", "discipline"]),
+    rows: issueRows
+  };
+  const walkthroughList = {
+    columns: wtHeaders,
+    filterColumn: guessColumn(wtHeaders, ["responsible", "responsibility"]),
+    rows: wtRows
+  };
+
+  addMsg(`Issue 상세 목록(Dashboard 시트): ${issueRows.length}건 인식 완료 (컬럼: ${issueHeaders.join(", ")})`, "ok");
+  addMsg(`Walkthrough 상세 목록(Dashboard 시트): ${wtRows.length}건 인식 완료 (컬럼: ${wtHeaders.join(", ")})`, "ok");
+
+  return {
+    issueList: issueRows.length ? issueList : null,
+    walkthroughList: wtRows.length ? walkthroughList : null
+  };
+}
+
 function parseIssueSheet(wb) {
   const result = parseGenericSheetFull(wb, "issue", "Issue 상세 목록");
   if (!result) return null;
@@ -609,8 +720,9 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
     const previous = await getPreviousData();
     const disciplines = parseProgressTable(rows);
     const { issueSummary, walkthroughSummary } = parseSummaryTables(rows);
-    const issueList = parseIssueSheet(wb);
-    const walkthroughList = parseWalkthroughSheet(wb);
+    const dashIssueWt = parseDashboardIssueWalkthrough(rows);
+    const issueList = dashIssueWt.issueList || parseIssueSheet(wb);
+    const walkthroughList = dashIssueWt.walkthroughList || parseWalkthroughSheet(wb);
     const welderStatus = parseWelderTable(rows);
     const dailyKeyActivities = parseActivitiesListAfterLabel(rows, "daily key activities");
     const disciplineNamesForRP = (disciplines || (previous && previous.disciplines) || []).map(d => d.name);
