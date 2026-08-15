@@ -26,6 +26,7 @@
       <button class="tab-btn" data-tab="trend">Daily Trend</button>
       <button class="tab-btn" data-tab="issue">Issue</button>
       <button class="tab-btn" data-tab="walkthrough">Walkthrough</button>
+      <button class="tab-btn" data-tab="welder">Welder Status</button>
     </nav>
 
     <!-- ================= DASHBOARD TAB ================= -->
@@ -206,6 +207,20 @@
             <tbody></tbody>
           </table>
         </div>
+      </section>
+    </div>
+
+    <!-- ================= WELDER STATUS TAB ================= -->
+    <div class="tab-panel" id="tab-welder">
+      <section class="card table-card">
+        <h3>Welder Mobilization Status</h3>
+        <div class="table-scroll">
+          <table id="welderTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="welderEmptyNote" class="placeholder-note" style="display:none;">This section will be populated once connected to live data.</p>
       </section>
     </div>
 

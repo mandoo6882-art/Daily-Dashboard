@@ -20,13 +20,10 @@ function initTabs() {
       // Chart.js needs a resize nudge when its canvas becomes visible again
       Object.values(charts).forEach(c => { try { c.resize(); } catch (e) {} });
       // The combo-chart proxy scrollbars couldn't take on their real scroll position while
-      // hidden (display:none collapses scrollWidth to 0) — snap them to the right (most
-      // recent dates) now that the tab is actually visible.
+      // hidden (display:none collapses scrollWidth to 0) — resync them now that the tab is
+      // actually visible, preserving whatever window (e.g. centered on today) was set.
       if (btn.dataset.tab === "trend") {
-        ["kqQtyComboScrollbar", "kqMpComboScrollbar", "kqProductivityScrollbar"].forEach(id => {
-          const el = document.getElementById(id);
-          if (el) requestAnimationFrame(() => { el.scrollLeft = el.scrollWidth; });
-        });
+        ["kqQtyComboScrollbar", "kqMpComboScrollbar", "kqProductivityScrollbar"].forEach(syncComboScrollbarPosition);
       }
     });
   });
@@ -168,8 +165,9 @@ function cumulativeOfSkippingNulls(arr) {
 // sits below it; dragging/scrolling that slides a fixed-width window of dates across the
 // x-axis (via scales.x.min/max) and calls chart.update(), so only the plotted data moves.
 const COMBO_VISIBLE_POINTS = 30;
+const comboScrollState = {}; // scrollbarId -> { overscroll, startIdx } (used to resync after a hidden tab becomes visible)
 
-function attachComboScrollbar(scrollbarId, chart, dates) {
+function attachComboScrollbar(scrollbarId, chart, dates, centerIndex) {
   const scrollbar = document.getElementById(scrollbarId);
   if (!scrollbar) return;
   const track = scrollbar.firstElementChild;
@@ -185,6 +183,7 @@ function attachComboScrollbar(scrollbarId, chart, dates) {
     chart.options.scales.x.min = dates[clamped];
     chart.options.scales.x.max = dates[endIdx];
     chart.update("none");
+    comboScrollState[scrollbarId] = { overscroll, startIdx: clamped };
   }
 
   scrollbar.onscroll = () => {
@@ -193,16 +192,41 @@ function attachComboScrollbar(scrollbarId, chart, dates) {
     applyWindow(Math.round(ratio * overscroll));
   };
 
-  // Default view: the most recent dates (right end), which is usually what matters most day to day.
-  applyWindow(overscroll);
-  requestAnimationFrame(() => { scrollbar.scrollLeft = scrollbar.scrollWidth; });
+  // Default view: centered on "today" (the cut-off date) when we can find it, so both recent
+  // history and the near-term plan are visible; otherwise fall back to the most recent dates.
+  const initialStart = (centerIndex != null && centerIndex >= 0)
+    ? Math.max(0, Math.min(centerIndex - Math.floor(visible / 2), overscroll))
+    : overscroll;
+  applyWindow(initialStart);
+  syncComboScrollbarPosition(scrollbarId);
+}
+
+function syncComboScrollbarPosition(scrollbarId) {
+  const scrollbar = document.getElementById(scrollbarId);
+  const state = comboScrollState[scrollbarId];
+  if (!scrollbar || !state) return;
+  requestAnimationFrame(() => {
+    const maxScroll = scrollbar.scrollWidth - scrollbar.clientWidth;
+    scrollbar.scrollLeft = state.overscroll > 0 ? (state.startIdx / state.overscroll) * maxScroll : 0;
+  });
+}
+
+// Finds the index in `dates` (formatted like "11-Aug") matching the project's cut-off date,
+// so the combo charts can open centered on "today" instead of always at the far edge.
+function findTodayIndex(dates, cutoffStr) {
+  if (!cutoffStr) return -1;
+  const d = new Date(cutoffStr);
+  if (isNaN(d.getTime())) return -1;
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const label = `${d.getDate()}-${months[d.getMonth()]}`;
+  return dates.indexOf(label);
 }
 
 // Combo chart: two bar series (Daily Plan/Actual) on the left axis + two line series
 // (Cumulative Plan/Actual) on the right axis, matching the original Excel chart style.
 function renderComboChart(canvasId, key, scrollbarId, dates, planLabel, planData, actualLabel, actualData,
                            cumPlanLabel, cumPlanData, cumActualLabel, cumActualData,
-                           leftAxisTitle, rightAxisTitle) {
+                           leftAxisTitle, rightAxisTitle, centerIndex) {
   destroyChart(key);
   const ctx = document.getElementById(canvasId).getContext("2d");
   charts[key] = new Chart(ctx, {
@@ -227,10 +251,10 @@ function renderComboChart(canvasId, key, scrollbarId, dates, planLabel, planData
       }
     }
   });
-  attachComboScrollbar(scrollbarId, charts[key], dates);
+  attachComboScrollbar(scrollbarId, charts[key], dates, centerIndex);
 }
 
-function renderProductivityChart(canvasId, key, scrollbarId, dates, values) {
+function renderProductivityChart(canvasId, key, scrollbarId, dates, values, centerIndex) {
   destroyChart(key);
   const ctx = document.getElementById(canvasId).getContext("2d");
   charts[key] = new Chart(ctx, {
@@ -252,7 +276,7 @@ function renderProductivityChart(canvasId, key, scrollbarId, dates, values) {
       }
     }
   });
-  attachComboScrollbar(scrollbarId, charts[key], dates);
+  attachComboScrollbar(scrollbarId, charts[key], dates, centerIndex);
 }
 
 // Daily Trend tab: Qty combo chart, MP combo chart, and Productivity (= Actual Qty / Actual MP),
@@ -275,13 +299,15 @@ function renderKeyQtyTrendCharts(data, disc) {
   emptyNote.style.display = "none";
 
   const dates = rp.dates;
+  const cutoff = data && data.projectInfo && data.projectInfo.cutoff;
+  const todayIdx = findTodayIndex(dates, cutoff);
   const cumQtyPlan = (rp.cumPlan && rp.cumPlan[disc]) || cumulativeOf(qtyPlan);
   const cumQtyActual = (rp.cumActual && rp.cumActual[disc]) || cumulativeOfSkippingNulls(qtyActual);
 
   renderComboChart("kqQtyComboChart", "kqQtyCombo", "kqQtyComboScrollbar", dates,
     "Plan_Daily", qtyPlan, "Actual_Daily", qtyActual || [],
     "Plan_Cumulative", cumQtyPlan, "Actual_Cumulative", cumQtyActual,
-    "Daily Qty", "Cumulative Qty");
+    "Daily Qty", "Cumulative Qty", todayIdx);
 
   const mpPlan = (rp.mpPlan && rp.mpPlan[disc]) || [];
   const mpActual = (rp.mpActual && rp.mpActual[disc]) || [];
@@ -291,13 +317,13 @@ function renderKeyQtyTrendCharts(data, disc) {
   renderComboChart("kqMpComboChart", "kqMpCombo", "kqMpComboScrollbar", dates,
     "MP Plan_Daily", mpPlan, "MP Actual_Daily", mpActual,
     "MP Plan_Cumulative", cumMpPlan, "MP Actual_Cumulative", cumMpActual,
-    "Daily MP", "Cumulative MP");
+    "Daily MP", "Cumulative MP", todayIdx);
 
   const productivity = (qtyActual || []).map((v, i) => {
     const mp = mpActual[i];
     return (v != null && mp) ? Math.round((v / mp) * 1000) / 1000 : null;
   });
-  renderProductivityChart("kqProductivityChart", "kqProductivity", "kqProductivityScrollbar", dates, productivity);
+  renderProductivityChart("kqProductivityChart", "kqProductivity", "kqProductivityScrollbar", dates, productivity, todayIdx);
 }
 
 function renderDailyActivities(data) {
@@ -313,6 +339,95 @@ function renderDailyActivities(data) {
     li.textContent = text;
     list.appendChild(li);
   });
+}
+
+const WELDER_GROUP_COLORS = ["#a9b6cc", "#c1dba0", "#f4c78e", "#9fc3d8", "#d8b0d0"];
+
+function renderWelderStatus(data) {
+  const rows = data.welderStatus || [];
+  const table = document.getElementById("welderTable");
+  const emptyNote = document.getElementById("welderEmptyNote");
+  const thead = table.querySelector("thead");
+  const tbody = table.querySelector("tbody");
+  thead.innerHTML = "";
+  tbody.innerHTML = "";
+
+  if (rows.length === 0) {
+    table.style.display = "none";
+    emptyNote.style.display = "block";
+    return;
+  }
+  table.style.display = "";
+  emptyNote.style.display = "none";
+
+  const isGroupSchema = rows.every(r => "Group" in r && "Plan" in r && "Actual" in r && "Var." in r);
+
+  if (isGroupSchema) {
+    table.classList.add("welder-grouped");
+    const trGroup = document.createElement("tr");
+    const trSub = document.createElement("tr");
+    const trData = document.createElement("tr");
+
+    rows.forEach((r, i) => {
+      const color = WELDER_GROUP_COLORS[i % WELDER_GROUP_COLORS.length];
+      const th = document.createElement("th");
+      th.colSpan = 3;
+      th.textContent = r["Group"];
+      th.style.background = color;
+      th.style.color = "#1c2733";
+      trGroup.appendChild(th);
+
+      ["Plan", "Actual", "Var."].forEach(label => {
+        const subTh = document.createElement("th");
+        subTh.textContent = label;
+        subTh.style.background = color;
+        subTh.style.color = "#1c2733";
+        subTh.style.fontWeight = "500";
+        trSub.appendChild(subTh);
+      });
+
+      const planTd = document.createElement("td");
+      planTd.textContent = r["Plan"];
+      planTd.style.background = color;
+      trData.appendChild(planTd);
+
+      const actualTd = document.createElement("td");
+      actualTd.textContent = r["Actual"];
+      actualTd.style.background = color;
+      trData.appendChild(actualTd);
+
+      const varTd = document.createElement("td");
+      varTd.textContent = r["Var."];
+      varTd.style.background = color;
+      const varNum = parseFloat(String(r["Var."]).replace(/,/g, ""));
+      if (!isNaN(varNum) && varNum < 0) varTd.style.color = "#c0392b";
+      trData.appendChild(varTd);
+    });
+
+    thead.appendChild(trGroup);
+    thead.appendChild(trSub);
+    tbody.appendChild(trData);
+  } else {
+    table.classList.remove("welder-grouped");
+    const columns = Object.keys(rows[0]);
+    const trHead = document.createElement("tr");
+    columns.forEach(c => {
+      const th = document.createElement("th");
+      th.textContent = c;
+      trHead.appendChild(th);
+    });
+    thead.appendChild(trHead);
+
+    rows.forEach(r => {
+      const tr = document.createElement("tr");
+      columns.forEach(c => {
+        const td = document.createElement("td");
+        td.textContent = r[c] != null ? r[c] : "";
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+  }
 }
 
 function cumulativeOf(arr) {
@@ -538,6 +653,7 @@ async function refreshDashboard() {
     renderSelectedDiscipline();
     renderProgressTable(currentData.disciplines);
     renderKeyQty(currentData.disciplines);
+    renderWelderStatus(currentData);
     renderIssueSection(currentData);
     renderWalkthroughSection(currentData);
     renderTrendTab(currentData);
