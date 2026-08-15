@@ -115,8 +115,14 @@ function addMsg(text, cls) {
 
 function parseProgressTable(rows) {
   const requiredCols = ["total", "completed", "remaining", "daily plan", "daily actual"];
+  // The Dashboard sheet has this same header twice: once around row ~32 for the single
+  // "currently selected Key Qty" summary (no name column), and once under the
+  // "■ PROGRESS Status" label for the full 11-discipline table (has a "Key Qty" name column).
+  // Search from the "progress status" label onward so we lock onto the right one.
+  const label = findLabelRow(rows, "progress status");
+  const searchStart = label ? label.row : 0;
   let headerRow = -1;
-  for (let r = 0; r < rows.length; r++) {
+  for (let r = searchStart; r < rows.length; r++) {
     const norms = rows[r].map(norm);
     if (requiredCols.every(h => norms.includes(h))) { headerRow = r; break; }
   }
