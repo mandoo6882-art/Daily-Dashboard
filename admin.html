@@ -113,6 +113,21 @@ function addMsg(text, cls) {
   document.getElementById("parseMsgs").appendChild(div);
 }
 
+function parseProjectInfo(rows) {
+  for (let r = 0; r < Math.min(rows.length, 10); r++) {
+    const row = rows[r] || [];
+    for (let c = 0; c < row.length; c++) {
+      const t = norm(row[c]);
+      if (t.includes("cut-off date") || t.includes("cut off date") || t.includes("cutoff date")) {
+        const cutoff = formatMaybeExcelDateText(row[c + 1]);
+        const categories = String(row[c + 2] == null ? "" : row[c + 2]).trim();
+        if (cutoff) return { cutoff, categories };
+      }
+    }
+  }
+  return null;
+}
+
 function parseProgressTable(rows) {
   const requiredCols = ["total", "completed", "remaining", "daily plan", "daily actual"];
   // The Dashboard sheet has this same header twice: once around row ~32 for the single
@@ -157,6 +172,10 @@ function parseProgressTable(rows) {
       if (blankStreak >= 2) break;
       continue;
     }
+    // A genuine discipline row always has a numeric Total. If it isn't a number, we've
+    // wandered past the table into an unrelated section below (e.g. a "Welder Mobilization
+    // Status" title sitting in the same column) — stop instead of collecting it as junk.
+    if (toNumOrNull(rows[r][cols.total]) == null) break;
     blankStreak = 0;
     out.push({
       name: String(nameVal).trim(),
@@ -731,6 +750,7 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
     document.getElementById("loadMsg").textContent = `"${sheetName}" 시트를 읽었습니다 (${rows.length}행). [시트 목록: ${wb.SheetNames.join(", ")}]`;
 
     const previous = await getPreviousData();
+    const projectInfo = parseProjectInfo(rows);
     const disciplines = parseProgressTable(rows);
     const { issueSummary, walkthroughSummary } = parseSummaryTables(rows);
     const dashIssueWt = parseDashboardIssueWalkthrough(rows);
@@ -742,7 +762,7 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
     const rpDaily = parseRPDaily(wb, disciplineNamesForRP);
 
     parsedData = {
-      projectInfo: (previous && previous.projectInfo) || { cutoff: "", categories: "" },
+      projectInfo: projectInfo || (previous && previous.projectInfo) || { cutoff: "", categories: "" },
       dailyKeyActivities: dailyKeyActivities || (previous && previous.dailyKeyActivities) || [],
       rpDaily: rpDaily || (previous && previous.rpDaily) || null,
       welderStatus: welderStatus || (previous && previous.welderStatus) || [],
@@ -753,6 +773,8 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
       walkthroughList: walkthroughList || (previous && previous.walkthroughList) || []
     };
 
+    if (projectInfo) addMsg(`Cut-off Date: ${projectInfo.cutoff} 인식 완료`, "ok");
+    else addMsg("Cut-off Date를 찾지 못했습니다. 이전 값을 유지합니다.", "warn");
     if (!disciplines) addMsg("Progress Status는 이전 data.json 값을 그대로 유지했습니다.", "warn");
     if (!issueSummary) addMsg("Issue 요약은 이전 data.json 값을 그대로 유지했습니다.", "warn");
     if (!walkthroughSummary) addMsg("Walkthrough 요약은 이전 data.json 값을 그대로 유지했습니다.", "warn");
