@@ -449,11 +449,14 @@ function findSheetByAliases(wb, aliases) {
   return wb.SheetNames.find(n => aliases.includes(norm(n).replace(/_/g, " ")));
 }
 
-// Scans the top of the sheet for the row with the most date-like formatted cells
+// Scans the top of the sheet for the row with the most *distinct* date-like formatted cells
 // (e.g. "1-Jun", "2-Jun" — read from the cell's displayed text, .w, not its raw serial value).
+// We score by distinct labels rather than raw match count because some sheets also have a
+// "week starting" row whose date label repeats across every day of that week — that row can
+// have just as many matching cells as the real day-by-day row, but far fewer distinct values.
 function findDateColumns(ws, rows, scanRowLimit) {
-  let best = { rowIdx: -1, cols: [] };
-  const limit = Math.min(rows.length, scanRowLimit || 12);
+  let best = { rowIdx: -1, cols: [], uniqueCount: -1 };
+  const limit = Math.min(rows.length, scanRowLimit || 20);
   for (let r = 0; r < limit; r++) {
     const row = rows[r] || [];
     const cols = [];
@@ -465,9 +468,12 @@ function findDateColumns(ws, rows, scanRowLimit) {
         cols.push({ col: c, label: text });
       }
     }
-    if (cols.length > best.cols.length) best = { rowIdx: r, cols };
+    const uniqueCount = new Set(cols.map(c => c.label)).size;
+    if (uniqueCount > best.uniqueCount || (uniqueCount === best.uniqueCount && cols.length > best.cols.length)) {
+      best = { rowIdx: r, cols, uniqueCount };
+    }
   }
-  return best.cols.length >= 3 ? best : null;
+  return (best.cols.length >= 3 && best.uniqueCount >= 3) ? best : null;
 }
 
 function bestDisciplineMatch(blockName, disciplineNames) {
