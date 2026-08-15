@@ -7,6 +7,21 @@
 let charts = {};
 let currentData = null;
 let selectedDiscipline = null;
+let selectedTrendDiscipline = null;
+
+function initTabs() {
+  const buttons = document.querySelectorAll(".tab-btn");
+  buttons.forEach(btn => {
+    btn.addEventListener("click", () => {
+      buttons.forEach(b => b.classList.remove("active"));
+      document.querySelectorAll(".tab-panel").forEach(p => p.classList.remove("active"));
+      btn.classList.add("active");
+      document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
+      // Chart.js needs a resize nudge when its canvas becomes visible again
+      Object.values(charts).forEach(c => { try { c.resize(); } catch (e) {} });
+    });
+  });
+}
 
 async function loadData() {
   // 1순위: 서버 API (나중에 OneDrive 자동 연동 시 이 경로 사용)
@@ -233,6 +248,87 @@ function renderWelderStatus(data) {
   }
 }
 
+function cumulativeOf(arr) {
+  let sum = 0;
+  return arr.map(v => (sum += (Number(v) || 0)));
+}
+
+function renderTrendTab(data) {
+  const sel = document.getElementById("trendDiscSelect");
+  const rp = data.rpDaily;
+  const emptyNote = document.getElementById("trendEmptyNote");
+  const chartsRow = document.querySelector("#tab-trend .charts-row-2");
+
+  const names = data.disciplines.map(d => d.name);
+  sel.innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join("");
+  if (!selectedTrendDiscipline || !names.includes(selectedTrendDiscipline)) {
+    selectedTrendDiscipline = names[0];
+  }
+  sel.value = selectedTrendDiscipline;
+  sel.onchange = () => {
+    selectedTrendDiscipline = sel.value;
+    renderTrendCharts(data);
+  };
+
+  if (!rp || !rp.dates || !rp.dates.length) {
+    chartsRow.style.display = "none";
+    emptyNote.style.display = "block";
+    return;
+  }
+  chartsRow.style.display = "";
+  emptyNote.style.display = "none";
+  renderTrendCharts(data);
+}
+
+function renderTrendCharts(data) {
+  const rp = data.rpDaily;
+  if (!rp || !rp.dates || !rp.dates.length) return;
+  const disc = selectedTrendDiscipline;
+  const plan = (rp.plan && rp.plan[disc]) || [];
+  const actual = (rp.actual && rp.actual[disc]) || [];
+
+  destroyChart("rpDaily");
+  const dailyCtx = document.getElementById("rpDailyChart").getContext("2d");
+  charts["rpDaily"] = new Chart(dailyCtx, {
+    type: "bar",
+    data: {
+      labels: rp.dates,
+      datasets: [
+        { label: "Plan", data: plan, backgroundColor: "#9fb3d9" },
+        { label: "Actual", data: actual, backgroundColor: "#1f3864" }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom" } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+
+  const cumPlan = (rp.cumPlan && rp.cumPlan[disc]) || cumulativeOf(plan);
+  const cumActual = (rp.cumActual && rp.cumActual[disc]) || cumulativeOf(actual);
+
+  destroyChart("rpCumulative");
+  const cumCtx = document.getElementById("rpCumulativeChart").getContext("2d");
+  charts["rpCumulative"] = new Chart(cumCtx, {
+    type: "line",
+    data: {
+      labels: rp.dates,
+      datasets: [
+        { label: "Plan", data: cumPlan, borderColor: "#9fb3d9", backgroundColor: "#9fb3d9", tension: 0.3, fill: false },
+        { label: "Actual", data: cumActual, borderColor: "#1f3864", backgroundColor: "#1f3864", tension: 0.3, fill: false }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: "bottom" } },
+      scales: { y: { beginAtZero: true } }
+    }
+  });
+}
+
 function renderProgressTable(disciplines) {
   const tbody = document.querySelector("#progressTable tbody");
   tbody.innerHTML = "";
@@ -439,6 +535,7 @@ async function refreshDashboard() {
     renderWelderStatus(currentData);
     renderIssueSection(currentData);
     renderWalkthroughSection(currentData);
+    renderTrendTab(currentData);
 
     document.getElementById("lastUpdated").textContent = "Last updated: " + new Date().toLocaleString("en-US");
   } catch (err) {
@@ -451,4 +548,7 @@ async function refreshDashboard() {
 }
 
 document.getElementById("refreshBtn").addEventListener("click", refreshDashboard);
-document.addEventListener("DOMContentLoaded", refreshDashboard);
+document.addEventListener("DOMContentLoaded", () => {
+  initTabs();
+  refreshDashboard();
+});

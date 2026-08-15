@@ -55,9 +55,9 @@
   </div>
 
   <div class="step">
-    <h2>2-1. Issue/Walkthrough가 제대로 안 보일 때 (디버그)</h2>
-    <p class="note">아래 버튼을 누르면 "Issue"/"Walkthrough" 시트의 실제 내용을 그대로 텍스트로 보여줍니다. 자동 인식이 안 될 때, 이 텍스트를 복사해서 Claude에게 보내주면 정확히 고칠 수 있어요.</p>
-    <button id="debugBtn" disabled>Issue/Walkthrough 시트 원본 보기</button>
+    <h2>2-1. 디버그 (일부 항목이 제대로 안 보일 때)</h2>
+    <p class="note">아래 버튼을 누르면 "Issue"/"Walkthrough"/"RP_D_Plan"/"RP_D_Actual"/"Dashboard" 시트의 실제 내용을 그대로 텍스트로 보여줍니다. 자동 인식이 안 될 때, 이 텍스트를 복사해서 Claude에게 보내주면 정확히 고칠 수 있어요.</p>
+    <button id="debugBtn" disabled>시트 원본 보기</button>
     <pre id="debugOutput" style="display:none;"></pre>
   </div>
 
@@ -545,6 +545,12 @@ document.getElementById("debugBtn").addEventListener("click", () => {
 
   out += issueSheetName ? dumpSheet(wb, issueSheetName, 25, 15) : '[no "Issue" sheet found]\n\n';
   out += wtSheetName ? dumpSheet(wb, wtSheetName, 25, 15) : '[no "Walkthrough" sheet found]\n\n';
+
+  const rpPlanName = wb.SheetNames.find(n => norm(n) === "rp_d_plan" || norm(n).replace(/_/g, " ") === "rp d plan");
+  const rpActualName = wb.SheetNames.find(n => norm(n) === "rp_d_actual" || norm(n).replace(/_/g, " ") === "rp d actual");
+  out += rpPlanName ? dumpSheet(wb, rpPlanName, 20, 25) : '[no "RP_D_Plan" sheet found]\n\n';
+  out += rpActualName ? dumpSheet(wb, rpActualName, 20, 25) : '[no "RP_D_Actual" sheet found]\n\n';
+
   out += dumpSheet(wb, dashSheetName, 200, 20);
 
   const el = document.getElementById("debugOutput");

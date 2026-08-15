@@ -21,116 +21,140 @@
       </div>
     </header>
 
-    <section class="card">
-      <h3>Daily Key Activities</h3>
-      <ul id="dailyActivitiesList" class="activities-list"></ul>
-    </section>
+    <nav class="tab-bar" id="tabBar">
+      <button class="tab-btn active" data-tab="dashboard">Dashboard</button>
+      <button class="tab-btn" data-tab="trend">Daily Trend</button>
+      <button class="tab-btn" data-tab="issue">Issue</button>
+      <button class="tab-btn" data-tab="walkthrough">Walkthrough</button>
+      <button class="tab-btn" data-tab="welder">Welder Status</button>
+    </nav>
 
-    <section class="card keyqty-card">
-      <h3>Key Qty Today's Achievement</h3>
-      <div class="keyqty-summary">
-        <div class="kq-stat kq-achieved"><span id="kqAchieved">0</span><label>Achieved</label></div>
-        <div class="kq-stat kq-not-achieved"><span id="kqNotAchieved">0</span><label>Not Achieved</label></div>
-        <div class="kq-stat kq-not-started"><span id="kqNotStarted">0</span><label>Not Started</label></div>
-      </div>
-      <div id="keyqtyGrid" class="keyqty-grid"></div>
-    </section>
+    <!-- ================= DASHBOARD TAB ================= -->
+    <div class="tab-panel active" id="tab-dashboard">
 
-    <section class="card selector-card">
-      <label for="disciplineSelect" class="selector-label">Select Key Qty</label>
-      <select id="disciplineSelect"></select>
-    </section>
+      <section class="card">
+        <h3>Daily Key Activities</h3>
+        <ul id="dailyActivitiesList" class="activities-list"></ul>
+      </section>
 
-    <section class="card table-card">
-      <div class="table-scroll">
-        <table id="selectedSummaryTable">
-          <thead>
-            <tr>
-              <th>Total</th><th>Completed</th><th>Remaining</th>
-              <th>Daily Plan</th><th>Daily Actual</th><th>Daily Var</th>
-              <th>Cum Plan</th><th>Cum Actual</th><th>Cum Var</th>
-              <th>Progress %</th><th>MP Plan</th><th>MP Actual</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td id="sTotal">-</td><td id="sCompleted">-</td><td id="sRemaining">-</td>
-              <td id="sDailyPlan">-</td><td id="sDailyActual">-</td><td id="sDailyVar">-</td>
-              <td id="sCumPlan">-</td><td id="sCumActual">-</td><td id="sCumVar">-</td>
-              <td id="sProgressPct">-</td><td id="sMpPlan">-</td><td id="sMpActual">-</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
-
-    <section class="kpi-row">
-      <div class="card kpi-progress">
-        <div class="kpi-label">Progress (Selected Item)</div>
-        <div class="progress-bar-outer">
-          <div id="overallProgressBar" class="progress-bar-inner" style="width:0%">0%</div>
+      <section class="card keyqty-card">
+        <h3>Key Qty Today's Achievement</h3>
+        <div class="keyqty-summary">
+          <div class="kq-stat kq-achieved"><span id="kqAchieved">0</span><label>Achieved</label></div>
+          <div class="kq-stat kq-not-achieved"><span id="kqNotAchieved">0</span><label>Not Achieved</label></div>
+          <div class="kq-stat kq-not-started"><span id="kqNotStarted">0</span><label>Not Started</label></div>
         </div>
-        <div class="kpi-sub">
-          <span id="kpiTotal">Total 0</span> ·
-          <span id="kpiCompleted">Completed 0</span> ·
-          <span id="kpiRemaining">Remaining 0</span>
+        <div id="keyqtyGrid" class="keyqty-grid"></div>
+      </section>
+
+      <section class="card selector-card">
+        <label for="disciplineSelect" class="selector-label">Select Key Qty</label>
+        <select id="disciplineSelect"></select>
+      </section>
+
+      <section class="card table-card">
+        <div class="table-scroll">
+          <table id="selectedSummaryTable">
+            <thead>
+              <tr>
+                <th>Total</th><th>Completed</th><th>Remaining</th>
+                <th>Daily Plan</th><th>Daily Actual</th><th>Daily Var</th>
+                <th>Cum Plan</th><th>Cum Actual</th><th>Cum Var</th>
+                <th>Progress %</th><th>MP Plan</th><th>MP Actual</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td id="sTotal">-</td><td id="sCompleted">-</td><td id="sRemaining">-</td>
+                <td id="sDailyPlan">-</td><td id="sDailyActual">-</td><td id="sDailyVar">-</td>
+                <td id="sCumPlan">-</td><td id="sCumActual">-</td><td id="sCumVar">-</td>
+                <td id="sProgressPct">-</td><td id="sMpPlan">-</td><td id="sMpActual">-</td>
+              </tr>
+            </tbody>
+          </table>
         </div>
-      </div>
-      <div class="card kpi-small">
-        <div class="kpi-label">MP (Manpower)</div>
-        <div class="kpi-value"><span id="kpiMpActual">-</span> / <span id="kpiMpPlan">-</span></div>
-      </div>
-      <div class="card kpi-small">
-        <div class="kpi-label">Today's Status</div>
-        <div class="kpi-value"><span id="kpiStatusBadge" class="badge">-</span></div>
-      </div>
-    </section>
+      </section>
 
-    <section class="charts-row">
-      <div class="card chart-card">
-        <h3>Daily (Plan vs Actual)</h3>
-        <div class="chart-wrap"><canvas id="dailyChart"></canvas></div>
-      </div>
-      <div class="card chart-card">
-        <h3>Cumulative (Plan vs Actual)</h3>
-        <div class="chart-wrap"><canvas id="cumulativeChart"></canvas></div>
-      </div>
-      <div class="card chart-card">
-        <h3>MP (Plan vs Actual)</h3>
-        <div class="chart-wrap"><canvas id="mpChart"></canvas></div>
-      </div>
-    </section>
+      <section class="kpi-row">
+        <div class="card kpi-progress">
+          <div class="kpi-label">Progress (Selected Item)</div>
+          <div class="progress-bar-outer">
+            <div id="overallProgressBar" class="progress-bar-inner" style="width:0%">0%</div>
+          </div>
+          <div class="kpi-sub">
+            <span id="kpiTotal">Total 0</span> ·
+            <span id="kpiCompleted">Completed 0</span> ·
+            <span id="kpiRemaining">Remaining 0</span>
+          </div>
+        </div>
+        <div class="card kpi-small">
+          <div class="kpi-label">MP (Manpower)</div>
+          <div class="kpi-value"><span id="kpiMpActual">-</span> / <span id="kpiMpPlan">-</span></div>
+        </div>
+        <div class="card kpi-small">
+          <div class="kpi-label">Today's Status</div>
+          <div class="kpi-value"><span id="kpiStatusBadge" class="badge">-</span></div>
+        </div>
+      </section>
 
-    <section class="card table-card">
-      <h3>Progress Status (Red = Behind / Yet)</h3>
-      <div class="table-scroll">
-        <table id="progressTable">
-          <thead>
-            <tr>
-              <th>Activity</th><th>Total</th><th>Completed</th><th>Remaining</th>
-              <th>Daily Plan</th><th>Daily Actual</th><th>Daily Var</th>
-              <th>Cum Plan</th><th>Cum Actual</th><th>Cum Var</th>
-              <th>MP Plan</th><th>MP Actual</th><th>Status</th>
-            </tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </section>
+      <section class="charts-row">
+        <div class="card chart-card">
+          <h3>Daily (Plan vs Actual)</h3>
+          <div class="chart-wrap"><canvas id="dailyChart"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <h3>Cumulative (Plan vs Actual)</h3>
+          <div class="chart-wrap"><canvas id="cumulativeChart"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <h3>MP (Plan vs Actual)</h3>
+          <div class="chart-wrap"><canvas id="mpChart"></canvas></div>
+        </div>
+      </section>
 
-    <section class="card table-card">
-      <h3>Welder Mobilization Status</h3>
-      <div class="table-scroll">
-        <table id="welderTable">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-      <p id="welderEmptyNote" class="placeholder-note" style="display:none;">This section will be populated once connected to live data.</p>
-    </section>
+      <section class="card table-card">
+        <h3>Progress Status (Red = Behind / Yet)</h3>
+        <div class="table-scroll">
+          <table id="progressTable">
+            <thead>
+              <tr>
+                <th>Activity</th><th>Total</th><th>Completed</th><th>Remaining</th>
+                <th>Daily Plan</th><th>Daily Actual</th><th>Daily Var</th>
+                <th>Cum Plan</th><th>Cum Actual</th><th>Cum Var</th>
+                <th>MP Plan</th><th>MP Actual</th><th>Status</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </section>
 
-    <section class="bottom-row">
-      <div class="card bottom-card">
+    </div>
+
+    <!-- ================= DAILY TREND TAB ================= -->
+    <div class="tab-panel" id="tab-trend">
+      <section class="card selector-card">
+        <label for="trendDiscSelect" class="selector-label">Select Key Qty</label>
+        <select id="trendDiscSelect"></select>
+      </section>
+
+      <section class="charts-row-2">
+        <div class="card chart-card">
+          <h3>RP Daily (Plan vs Actual by date)</h3>
+          <div class="chart-wrap chart-wrap-tall"><canvas id="rpDailyChart"></canvas></div>
+        </div>
+        <div class="card chart-card">
+          <h3>RP Cumulative (Plan vs Actual curve)</h3>
+          <div class="chart-wrap chart-wrap-tall"><canvas id="rpCumulativeChart"></canvas></div>
+        </div>
+      </section>
+
+      <p id="trendEmptyNote" class="placeholder-note" style="display:none;">This section will be populated once connected to RP_D_Plan / RP_D_Actual data.</p>
+    </div>
+
+    <!-- ================= ISSUE TAB ================= -->
+    <div class="tab-panel" id="tab-issue">
+      <section class="card">
         <h3>Issue Tracking (by Discipline)</h3>
         <div class="pie-and-table">
           <div class="chart-wrap"><canvas id="issuePie"></canvas></div>
@@ -150,8 +174,12 @@
             <tbody></tbody>
           </table>
         </div>
-      </div>
-      <div class="card bottom-card">
+      </section>
+    </div>
+
+    <!-- ================= WALKTHROUGH TAB ================= -->
+    <div class="tab-panel" id="tab-walkthrough">
+      <section class="card">
         <h3>Walkthrough Action Items (by Responsibility)</h3>
         <div class="pie-and-table">
           <div class="chart-wrap"><canvas id="walkthroughPie"></canvas></div>
@@ -171,8 +199,22 @@
             <tbody></tbody>
           </table>
         </div>
-      </div>
-    </section>
+      </section>
+    </div>
+
+    <!-- ================= WELDER STATUS TAB ================= -->
+    <div class="tab-panel" id="tab-welder">
+      <section class="card table-card">
+        <h3>Welder Mobilization Status</h3>
+        <div class="table-scroll">
+          <table id="welderTable">
+            <thead></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <p id="welderEmptyNote" class="placeholder-note" style="display:none;">This section will be populated once connected to live data.</p>
+      </section>
+    </div>
 
     <footer class="footnote">
       Data source: Excel maintained by site team (OneDrive integration planned) · Manual refresh once daily

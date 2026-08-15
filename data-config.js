@@ -23,6 +23,7 @@ const CONFIG = {
 // ------------------------------------------------------------
 const MOCK_DATA = {
   dailyKeyActivities: [],
+  rpDaily: null,
   welderStatus: [
     { "Group": "JCC Received", "Plan": "308", "Actual": "215", "Var.": "-93" },
     { "Group": "JCC under Approval", "Plan": "27", "Actual": "6", "Var.": "-21" }
