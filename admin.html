@@ -631,6 +631,18 @@ function strictDisciplineMatch(text, disciplineNames) {
   return best;
 }
 
+// Exact-match only (no prefix/substring fuzziness) — used for the "combine two adjacent
+// label rows" check below, where we want high confidence before trusting the combination.
+function exactDisciplineMatch(text, disciplineNames) {
+  const bn = norm(text).replace(/[^a-z0-9]/g, "");
+  if (!bn) return null;
+  for (const dn of (disciplineNames || [])) {
+    const dnn = norm(dn).replace(/[^a-z0-9]/g, "");
+    if (dnn && bn === dnn) return dn;
+  }
+  return null;
+}
+
 // Parses a "repeating discipline block" sheet like RP_D_Plan / RP_D_Actual. Blocks aren't all
 // laid out identically (some have a Total/Completed/Remaining header + Train-level breakdown
 // rows, others are just a bare discipline name above the data rows), so instead of anchoring
@@ -652,6 +664,19 @@ function parseRPBlockSheet(wb, sheetName, disciplineNames) {
     for (let r = fromRow; r >= Math.max(fromRow - 20, 0); r--) {
       const raw = String((rows[r] || [])[LABEL_COL] == null ? "" : (rows[r] || [])[LABEL_COL]).trim();
       if (!raw) continue;
+
+      // Some blocks split the discipline name across two rows (e.g. "INST" on one row,
+      // "Cable Pulling" + Total/Completed/Remaining headers on the next) — on its own,
+      // "Cable Pulling" ambiguously prefix-matches BOTH "Cable Pulling - ELEC" and
+      // "Cable Pulling - INST". Try combining with the row directly above first; only an
+      // exact match on the combination is trusted, so this can't introduce new ambiguity.
+      const above = String((rows[r - 1] || [])[LABEL_COL] == null ? "" : (rows[r - 1] || [])[LABEL_COL]).trim();
+      if (above) {
+        const combined = exactDisciplineMatch(raw + " " + above, disciplineNames)
+          || exactDisciplineMatch(above + " " + raw, disciplineNames);
+        if (combined) return combined;
+      }
+
       const match = strictDisciplineMatch(raw, disciplineNames);
       if (match) return match;
     }
