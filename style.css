@@ -236,9 +236,9 @@ table.welder-grouped tbody td { font-size: 16px; font-weight: 700; padding: 10px
 
 .footnote { text-align: center; font-size: 12px; color: var(--muted); padding: 10px 0 4px; }
 
-.combo-scroll { overflow-x: auto; }
-.combo-scroll-inner { height: 240px; position: relative; }
-.combo-hint { font-size: 10.5px; color: var(--muted); text-align: right; margin-top: 4px; }
+.combo-chart-wrap { height: 240px; position: relative; }
+.combo-scrollbar { overflow-x: auto; overflow-y: hidden; height: 14px; margin-top: 6px; }
+.combo-scrollbar-track { height: 1px; }
 
 @media (max-width: 900px) {
   .charts-row, .bottom-row, .kpi-row, .charts-row-2 { grid-template-columns: 1fr; }

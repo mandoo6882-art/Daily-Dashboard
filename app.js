@@ -19,6 +19,15 @@ function initTabs() {
       document.getElementById("tab-" + btn.dataset.tab).classList.add("active");
       // Chart.js needs a resize nudge when its canvas becomes visible again
       Object.values(charts).forEach(c => { try { c.resize(); } catch (e) {} });
+      // The combo-chart proxy scrollbars couldn't take on their real scroll position while
+      // hidden (display:none collapses scrollWidth to 0) — snap them to the right (most
+      // recent dates) now that the tab is actually visible.
+      if (btn.dataset.tab === "trend") {
+        ["kqQtyComboScrollbar", "kqMpComboScrollbar", "kqProductivityScrollbar"].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) requestAnimationFrame(() => { el.scrollLeft = el.scrollWidth; });
+        });
+      }
     });
   });
 }
@@ -155,22 +164,46 @@ function cumulativeOfSkippingNulls(arr) {
   });
 }
 
-// Widens the scrollable inner wrapper so there's ~26px per date point (min = visible width),
-// which is what makes the horizontal scrollbar appear once there are many dates.
-function sizeComboScrollInner(canvasId, pointCount) {
-  const inner = document.getElementById(canvasId).parentElement;
-  const outer = inner.parentElement;
-  const visibleWidth = (outer && outer.clientWidth) || 600;
-  inner.style.width = Math.max(pointCount * 26, visibleWidth) + "px";
+// The chart canvas itself stays a FIXED size (axes never move). A thin proxy "scrollbar" div
+// sits below it; dragging/scrolling that slides a fixed-width window of dates across the
+// x-axis (via scales.x.min/max) and calls chart.update(), so only the plotted data moves.
+const COMBO_VISIBLE_POINTS = 30;
+
+function attachComboScrollbar(scrollbarId, chart, dates) {
+  const scrollbar = document.getElementById(scrollbarId);
+  if (!scrollbar) return;
+  const track = scrollbar.firstElementChild;
+  const total = dates.length;
+  const visible = Math.min(COMBO_VISIBLE_POINTS, total);
+  const overscroll = Math.max(total - visible, 0);
+
+  track.style.width = Math.max(total * 8, scrollbar.clientWidth || 300) + "px";
+
+  function applyWindow(startIdx) {
+    const clamped = Math.max(0, Math.min(startIdx, overscroll));
+    const endIdx = Math.min(clamped + visible - 1, total - 1);
+    chart.options.scales.x.min = dates[clamped];
+    chart.options.scales.x.max = dates[endIdx];
+    chart.update("none");
+  }
+
+  scrollbar.onscroll = () => {
+    const maxScroll = scrollbar.scrollWidth - scrollbar.clientWidth;
+    const ratio = maxScroll > 0 ? scrollbar.scrollLeft / maxScroll : 0;
+    applyWindow(Math.round(ratio * overscroll));
+  };
+
+  // Default view: the most recent dates (right end), which is usually what matters most day to day.
+  applyWindow(overscroll);
+  requestAnimationFrame(() => { scrollbar.scrollLeft = scrollbar.scrollWidth; });
 }
 
 // Combo chart: two bar series (Daily Plan/Actual) on the left axis + two line series
 // (Cumulative Plan/Actual) on the right axis, matching the original Excel chart style.
-function renderComboChart(canvasId, key, dates, planLabel, planData, actualLabel, actualData,
+function renderComboChart(canvasId, key, scrollbarId, dates, planLabel, planData, actualLabel, actualData,
                            cumPlanLabel, cumPlanData, cumActualLabel, cumActualData,
                            leftAxisTitle, rightAxisTitle) {
   destroyChart(key);
-  sizeComboScrollInner(canvasId, dates.length);
   const ctx = document.getElementById(canvasId).getContext("2d");
   charts[key] = new Chart(ctx, {
     data: {
@@ -185,19 +218,20 @@ function renderComboChart(canvasId, key, dates, planLabel, planData, actualLabel
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
       plugins: { legend: { position: "top", labels: { boxWidth: 10, font: { size: 10 } } } },
       scales: {
-        x: { ticks: { font: { size: 8 }, maxRotation: 90, minRotation: 90 } },
+        x: { type: "category", ticks: { font: { size: 9 }, maxRotation: 60, minRotation: 0 } },
         y: { position: "left", beginAtZero: true, title: { display: true, text: leftAxisTitle, font: { size: 10 } }, ticks: { font: { size: 9 } } },
         y1: { position: "right", beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: rightAxisTitle, font: { size: 10 } }, ticks: { font: { size: 9 } } }
       }
     }
   });
+  attachComboScrollbar(scrollbarId, charts[key], dates);
 }
 
-function renderProductivityChart(canvasId, key, dates, values) {
+function renderProductivityChart(canvasId, key, scrollbarId, dates, values) {
   destroyChart(key);
-  sizeComboScrollInner(canvasId, dates.length);
   const ctx = document.getElementById(canvasId).getContext("2d");
   charts[key] = new Chart(ctx, {
     type: "line",
@@ -210,13 +244,15 @@ function renderProductivityChart(canvasId, key, dates, values) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      animation: false,
       plugins: { legend: { position: "top", labels: { boxWidth: 10, font: { size: 10 } } } },
       scales: {
-        x: { ticks: { font: { size: 8 }, maxRotation: 90, minRotation: 90 } },
+        x: { type: "category", ticks: { font: { size: 9 }, maxRotation: 60, minRotation: 0 } },
         y: { beginAtZero: true, ticks: { font: { size: 9 } } }
       }
     }
   });
+  attachComboScrollbar(scrollbarId, charts[key], dates);
 }
 
 // Daily Trend tab: Qty combo chart, MP combo chart, and Productivity (= Actual Qty / Actual MP),
@@ -242,7 +278,7 @@ function renderKeyQtyTrendCharts(data, disc) {
   const cumQtyPlan = (rp.cumPlan && rp.cumPlan[disc]) || cumulativeOf(qtyPlan);
   const cumQtyActual = (rp.cumActual && rp.cumActual[disc]) || cumulativeOfSkippingNulls(qtyActual);
 
-  renderComboChart("kqQtyComboChart", "kqQtyCombo", dates,
+  renderComboChart("kqQtyComboChart", "kqQtyCombo", "kqQtyComboScrollbar", dates,
     "Plan_Daily", qtyPlan, "Actual_Daily", qtyActual || [],
     "Plan_Cumulative", cumQtyPlan, "Actual_Cumulative", cumQtyActual,
     "Daily Qty", "Cumulative Qty");
@@ -252,7 +288,7 @@ function renderKeyQtyTrendCharts(data, disc) {
   const cumMpPlan = (rp.mpCumPlan && rp.mpCumPlan[disc]) || cumulativeOf(mpPlan);
   const cumMpActual = (rp.mpCumActual && rp.mpCumActual[disc]) || cumulativeOfSkippingNulls(mpActual);
 
-  renderComboChart("kqMpComboChart", "kqMpCombo", dates,
+  renderComboChart("kqMpComboChart", "kqMpCombo", "kqMpComboScrollbar", dates,
     "MP Plan_Daily", mpPlan, "MP Actual_Daily", mpActual,
     "MP Plan_Cumulative", cumMpPlan, "MP Actual_Cumulative", cumMpActual,
     "Daily MP", "Cumulative MP");
@@ -261,7 +297,7 @@ function renderKeyQtyTrendCharts(data, disc) {
     const mp = mpActual[i];
     return (v != null && mp) ? Math.round((v / mp) * 1000) / 1000 : null;
   });
-  renderProductivityChart("kqProductivityChart", "kqProductivity", dates, productivity);
+  renderProductivityChart("kqProductivityChart", "kqProductivity", "kqProductivityScrollbar", dates, productivity);
 }
 
 function renderDailyActivities(data) {
@@ -277,95 +313,6 @@ function renderDailyActivities(data) {
     li.textContent = text;
     list.appendChild(li);
   });
-}
-
-const WELDER_GROUP_COLORS = ["#a9b6cc", "#c1dba0", "#f4c78e", "#9fc3d8", "#d8b0d0"];
-
-function renderWelderStatus(data) {
-  const rows = data.welderStatus || [];
-  const table = document.getElementById("welderTable");
-  const emptyNote = document.getElementById("welderEmptyNote");
-  const thead = table.querySelector("thead");
-  const tbody = table.querySelector("tbody");
-  thead.innerHTML = "";
-  tbody.innerHTML = "";
-
-  if (rows.length === 0) {
-    table.style.display = "none";
-    emptyNote.style.display = "block";
-    return;
-  }
-  table.style.display = "";
-  emptyNote.style.display = "none";
-
-  const isGroupSchema = rows.every(r => "Group" in r && "Plan" in r && "Actual" in r && "Var." in r);
-
-  if (isGroupSchema) {
-    table.classList.add("welder-grouped");
-    const trGroup = document.createElement("tr");
-    const trSub = document.createElement("tr");
-    const trData = document.createElement("tr");
-
-    rows.forEach((r, i) => {
-      const color = WELDER_GROUP_COLORS[i % WELDER_GROUP_COLORS.length];
-      const th = document.createElement("th");
-      th.colSpan = 3;
-      th.textContent = r["Group"];
-      th.style.background = color;
-      th.style.color = "#1c2733";
-      trGroup.appendChild(th);
-
-      ["Plan", "Actual", "Var."].forEach(label => {
-        const subTh = document.createElement("th");
-        subTh.textContent = label;
-        subTh.style.background = color;
-        subTh.style.color = "#1c2733";
-        subTh.style.fontWeight = "500";
-        trSub.appendChild(subTh);
-      });
-
-      const planTd = document.createElement("td");
-      planTd.textContent = r["Plan"];
-      planTd.style.background = color;
-      trData.appendChild(planTd);
-
-      const actualTd = document.createElement("td");
-      actualTd.textContent = r["Actual"];
-      actualTd.style.background = color;
-      trData.appendChild(actualTd);
-
-      const varTd = document.createElement("td");
-      varTd.textContent = r["Var."];
-      varTd.style.background = color;
-      const varNum = parseFloat(String(r["Var."]).replace(/,/g, ""));
-      if (!isNaN(varNum) && varNum < 0) varTd.style.color = "#c0392b";
-      trData.appendChild(varTd);
-    });
-
-    thead.appendChild(trGroup);
-    thead.appendChild(trSub);
-    tbody.appendChild(trData);
-  } else {
-    table.classList.remove("welder-grouped");
-    const columns = Object.keys(rows[0]);
-    const trHead = document.createElement("tr");
-    columns.forEach(c => {
-      const th = document.createElement("th");
-      th.textContent = c;
-      trHead.appendChild(th);
-    });
-    thead.appendChild(trHead);
-
-    rows.forEach(r => {
-      const tr = document.createElement("tr");
-      columns.forEach(c => {
-        const td = document.createElement("td");
-        td.textContent = r[c] != null ? r[c] : "";
-        tr.appendChild(td);
-      });
-      tbody.appendChild(tr);
-    });
-  }
 }
 
 function cumulativeOf(arr) {
@@ -591,7 +538,6 @@ async function refreshDashboard() {
     renderSelectedDiscipline();
     renderProgressTable(currentData.disciplines);
     renderKeyQty(currentData.disciplines);
-    renderWelderStatus(currentData);
     renderIssueSection(currentData);
     renderWalkthroughSection(currentData);
     renderTrendTab(currentData);

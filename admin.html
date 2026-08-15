@@ -183,7 +183,15 @@ function parseProgressTable(rows) {
 }
 
 function parseSummaryTables(rows) {
-  const sharedRow = findRowIndexContaining(rows, "discipline");
+  // Anchor on the "■ ISSUE TRACKING" label first, then search for the "Discipline" header
+  // from there onward — a blind sheet-wide search for "discipline" risks matching some other,
+  // unrelated occurrence of the word earlier in the sheet.
+  const issueLabel = findLabelRow(rows, "issue tracking");
+  const searchStart = issueLabel ? issueLabel.row : 0;
+  let sharedRow = -1;
+  for (let r = searchStart; r < rows.length; r++) {
+    if (rows[r].map(norm).includes("discipline")) { sharedRow = r; break; }
+  }
   if (sharedRow === -1) {
     addMsg("Issue/Walkthrough 요약 표를 찾지 못했습니다. 이전 데이터를 유지합니다.", "err");
     return { issueSummary: null, walkthroughSummary: null };
@@ -587,67 +595,72 @@ function findDateColumns(ws, rows, scanRowLimit) {
   return (best.cols.length >= 3 && best.uniqueCount >= 3) ? best : null;
 }
 
-function bestDisciplineMatch(blockName, disciplineNames) {
-  const bn = norm(blockName).replace(/[^a-z0-9]/g, "");
+// Strict version: only returns a match when the label text genuinely resembles one of the
+// known discipline names (used while scanning upward for a block's discipline header, so we
+// don't mistake sub-item rows like "Train 7" or "PAS" for the discipline name itself).
+function strictDisciplineMatch(text, disciplineNames) {
+  const bn = norm(text).replace(/[^a-z0-9]/g, "");
+  if (bn.length < 3) return null;
   let best = null, bestLen = -1;
   (disciplineNames || []).forEach(dn => {
     const dnn = norm(dn).replace(/[^a-z0-9]/g, "");
-    if (!dnn) return;
+    if (dnn.length < 4) return;
     if (bn === dnn || bn.startsWith(dnn) || dnn.startsWith(bn) || bn.includes(dnn)) {
       if (dnn.length > bestLen) { best = dn; bestLen = dnn.length; }
     }
   });
-  return best || blockName;
+  return best;
 }
 
-// Parses a "repeating discipline block" sheet like RP_D_Plan / RP_D_Actual:
-// each block starts with a "<Discipline> | Total | Completed | Remaining" header row
-// (discipline name in column B), followed by an "RP_Daily" row, an "RP_Cumulative" row,
-// and (optionally) an "MP Resource" row — all sharing the same date columns found near
-// the top of the sheet.
+// Parses a "repeating discipline block" sheet like RP_D_Plan / RP_D_Actual. Blocks aren't all
+// laid out identically (some have a Total/Completed/Remaining header + Train-level breakdown
+// rows, others are just a bare discipline name above the data rows), so instead of anchoring
+// on a fixed header shape we scan the whole sheet for the data rows themselves — a column B
+// label of "RP_Daily", "RP_Cumulative", or "MP Resource" (Field Weld uses "Welders" instead)
+// — and attribute each one to the nearest discipline name found scanning upward from it.
 function parseRPBlockSheet(wb, sheetName, disciplineNames) {
   const ws = wb.Sheets[sheetName];
   if (!ws) return null;
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
 
-  const dateInfo = findDateColumns(ws, rows, 12);
+  const dateInfo = findDateColumns(ws, rows, 20);
   if (!dateInfo) return null;
   const dates = dateInfo.cols.map(c => c.label);
 
   const LABEL_COL = 1; // column B
-  const blocks = [];
-  for (let r = 0; r < rows.length; r++) {
-    const row = rows[r] || [];
-    if (norm(row[2]) === "total" && norm(row[3]) === "completed") {
-      blocks.push({ name: String(row[LABEL_COL] == null ? "" : row[LABEL_COL]).trim(), headerRow: r });
+
+  function disciplineAbove(fromRow) {
+    for (let r = fromRow; r >= Math.max(fromRow - 20, 0); r--) {
+      const raw = String((rows[r] || [])[LABEL_COL] == null ? "" : (rows[r] || [])[LABEL_COL]).trim();
+      if (!raw) continue;
+      const match = strictDisciplineMatch(raw, disciplineNames);
+      if (match) return match;
     }
+    return null;
   }
-  if (blocks.length === 0) return null;
 
   const series = {}, cumSeries = {}, mpSeries = {};
-  const blockNames = [];
+  const foundDisciplines = new Set();
 
-  blocks.forEach((block, i) => {
-    const startRow = block.headerRow;
-    const endRow = (i + 1 < blocks.length) ? blocks[i + 1].headerRow : rows.length;
-    const discipline = bestDisciplineMatch(block.name, disciplineNames);
-    blockNames.push(block.name + (discipline !== block.name ? ` → ${discipline}` : ""));
+  for (let r = 0; r < rows.length; r++) {
+    const rawLabel = String((rows[r] || [])[LABEL_COL] == null ? "" : (rows[r] || [])[LABEL_COL]).replace(/^[•\s]+/, "").trim();
+    if (!rawLabel) continue;
+    const label = norm(rawLabel);
 
-    for (let r = startRow; r < endRow; r++) {
-      const rawLabel = String((rows[r] || [])[LABEL_COL] == null ? "" : (rows[r] || [])[LABEL_COL]).replace(/^[•\s]+/, "").trim();
-      const label = norm(rawLabel);
-      if (label === "rp_daily" || label === "rp daily") {
-        series[discipline] = dateInfo.cols.map(c => toNumOrNull(rows[r][c.col]));
-      } else if (label === "rp_cumulative" || label === "rp cumulative") {
-        cumSeries[discipline] = dateInfo.cols.map(c => toNumOrNull(rows[r][c.col]));
-      } else if (label.includes("mp resource")) {
-        mpSeries[discipline] = dateInfo.cols.map(c => toNumOrNull(rows[r][c.col]));
-      }
+    if (label === "rp_daily" || label === "rp daily") {
+      const disc = disciplineAbove(r - 1);
+      if (disc) { series[disc] = dateInfo.cols.map(c => toNumOrNull(rows[r][c.col])); foundDisciplines.add(disc); }
+    } else if (label === "rp_cumulative" || label === "rp cumulative") {
+      const disc = disciplineAbove(r - 1);
+      if (disc) cumSeries[disc] = dateInfo.cols.map(c => toNumOrNull(rows[r][c.col]));
+    } else if (label.includes("mp resource") || label.includes("welder")) {
+      const disc = disciplineAbove(r - 1);
+      if (disc) mpSeries[disc] = dateInfo.cols.map(c => toNumOrNull(rows[r][c.col]));
     }
-  });
+  }
 
   if (Object.keys(series).length === 0) return null;
-  return { dates, series, cumSeries, mpSeries, blockNames };
+  return { dates, series, cumSeries, mpSeries, blockNames: Array.from(foundDisciplines) };
 }
 
 // Builds data.rpDaily from the RP_D_Plan / RP_D_Actual sheets for the Qty/MP trend +

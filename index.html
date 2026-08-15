@@ -26,7 +26,6 @@
       <button class="tab-btn" data-tab="trend">Daily Trend</button>
       <button class="tab-btn" data-tab="issue">Issue</button>
       <button class="tab-btn" data-tab="walkthrough">Walkthrough</button>
-      <button class="tab-btn" data-tab="welder">Welder Status</button>
     </nav>
 
     <!-- ================= DASHBOARD TAB ================= -->
@@ -141,20 +140,20 @@
       <div id="kqTrendSection">
         <section class="card">
           <h3>Qty Trend (Daily Plan/Actual bars + Cumulative curve, by date)</h3>
-          <div class="combo-scroll"><div class="combo-scroll-inner"><canvas id="kqQtyComboChart"></canvas></div></div>
-          <div class="combo-hint">← Scroll to see the full date range →</div>
+          <div class="combo-chart-wrap"><canvas id="kqQtyComboChart"></canvas></div>
+          <div class="combo-scrollbar" id="kqQtyComboScrollbar"><div class="combo-scrollbar-track"></div></div>
         </section>
 
         <section class="card">
           <h3>MP Trend (Daily Plan/Actual bars + Cumulative curve, by date)</h3>
-          <div class="combo-scroll"><div class="combo-scroll-inner"><canvas id="kqMpComboChart"></canvas></div></div>
-          <div class="combo-hint">← Scroll to see the full date range →</div>
+          <div class="combo-chart-wrap"><canvas id="kqMpComboChart"></canvas></div>
+          <div class="combo-scrollbar" id="kqMpComboScrollbar"><div class="combo-scrollbar-track"></div></div>
         </section>
 
         <section class="card">
           <h3>Productivity (Actual Qty ÷ Actual MP, by date)</h3>
-          <div class="combo-scroll"><div class="combo-scroll-inner"><canvas id="kqProductivityChart"></canvas></div></div>
-          <div class="combo-hint">← Scroll to see the full date range →</div>
+          <div class="combo-chart-wrap"><canvas id="kqProductivityChart"></canvas></div>
+          <div class="combo-scrollbar" id="kqProductivityScrollbar"><div class="combo-scrollbar-track"></div></div>
         </section>
       </div>
       <p id="kqTrendEmptyNote" class="placeholder-note" style="display:none;">This section will be populated once connected to RP_D_Plan / RP_D_Actual data.</p>
@@ -207,20 +206,6 @@
             <tbody></tbody>
           </table>
         </div>
-      </section>
-    </div>
-
-    <!-- ================= WELDER STATUS TAB ================= -->
-    <div class="tab-panel" id="tab-welder">
-      <section class="card table-card">
-        <h3>Welder Mobilization Status</h3>
-        <div class="table-scroll">
-          <table id="welderTable">
-            <thead></thead>
-            <tbody></tbody>
-          </table>
-        </div>
-        <p id="welderEmptyNote" class="placeholder-note" style="display:none;">This section will be populated once connected to live data.</p>
       </section>
     </div>
 
