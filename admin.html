@@ -435,95 +435,120 @@ function findSheetByAliases(wb, aliases) {
   return wb.SheetNames.find(n => aliases.includes(norm(n).replace(/_/g, " ")));
 }
 
-function excelSerialToLabel(v) {
-  if (v instanceof Date) return (v.getMonth() + 1) + "/" + v.getDate();
-  if (typeof v === "number" && window.XLSX && XLSX.SSF && XLSX.SSF.parse_date_code) {
-    const d = XLSX.SSF.parse_date_code(v);
-    if (d && d.m && d.d) return d.m + "/" + d.d;
+// Scans the top of the sheet for the row with the most date-like formatted cells
+// (e.g. "1-Jun", "2-Jun" — read from the cell's displayed text, .w, not its raw serial value).
+function findDateColumns(ws, rows, scanRowLimit) {
+  let best = { rowIdx: -1, cols: [] };
+  const limit = Math.min(rows.length, scanRowLimit || 12);
+  for (let r = 0; r < limit; r++) {
+    const row = rows[r] || [];
+    const cols = [];
+    for (let c = 0; c < row.length; c++) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const cellObj = ws[addr];
+      const text = cellObj && cellObj.w ? String(cellObj.w).trim() : "";
+      if (/^\d{1,2}[-\/][A-Za-z]{3,9}$/.test(text) || /^\d{1,2}[-\/]\d{1,2}$/.test(text)) {
+        cols.push({ col: c, label: text });
+      }
+    }
+    if (cols.length > best.cols.length) best = { rowIdx: r, cols };
   }
-  return String(v == null ? "" : v).trim();
+  return best.cols.length >= 3 ? best : null;
 }
 
-// Reads a "Date in one column, one series per other column" sheet (used for RP_D_Plan / RP_D_Actual).
-function parseDateSeriesSheet(wb, sheetName) {
+function bestDisciplineMatch(blockName, disciplineNames) {
+  const bn = norm(blockName).replace(/[^a-z0-9]/g, "");
+  let best = null, bestLen = -1;
+  (disciplineNames || []).forEach(dn => {
+    const dnn = norm(dn).replace(/[^a-z0-9]/g, "");
+    if (!dnn) return;
+    if (bn === dnn || bn.startsWith(dnn) || dnn.startsWith(bn) || bn.includes(dnn)) {
+      if (dnn.length > bestLen) { best = dn; bestLen = dnn.length; }
+    }
+  });
+  return best || blockName;
+}
+
+// Parses a "repeating discipline block" sheet like RP_D_Plan / RP_D_Actual:
+// each block starts with a "<Discipline> | Total | Completed | Remaining" header row
+// (discipline name in column B), followed by an "RP_Daily" row, an "RP_Cumulative" row,
+// and (optionally) an "MP Resource" row — all sharing the same date columns found near
+// the top of the sheet.
+function parseRPBlockSheet(wb, sheetName, disciplineNames) {
   const ws = wb.Sheets[sheetName];
   if (!ws) return null;
   const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
 
-  let headerRowIdx = -1, dateColIdx = -1;
-  for (let r = 0; r < Math.min(rows.length, 15); r++) {
+  const dateInfo = findDateColumns(ws, rows, 12);
+  if (!dateInfo) return null;
+  const dates = dateInfo.cols.map(c => c.label);
+
+  const LABEL_COL = 1; // column B
+  const blocks = [];
+  for (let r = 0; r < rows.length; r++) {
     const row = rows[r] || [];
-    const idx = row.findIndex(c => norm(c) === "date");
-    if (idx !== -1) { headerRowIdx = r; dateColIdx = idx; break; }
+    if (norm(row[2]) === "total" && norm(row[3]) === "completed") {
+      blocks.push({ name: String(row[LABEL_COL] == null ? "" : row[LABEL_COL]).trim(), headerRow: r });
+    }
   }
-  if (headerRowIdx === -1) return null;
+  if (blocks.length === 0) return null;
 
-  const headerRow = rows[headerRowIdx];
-  const seriesCols = [];
-  headerRow.forEach((c, i) => {
-    if (i === dateColIdx) return;
-    const name = String(c == null ? "" : c).trim();
-    if (name !== "") seriesCols.push({ name, i });
-  });
-  if (seriesCols.length === 0) return null;
+  const series = {}, cumSeries = {}, mpSeries = {};
+  const blockNames = [];
 
-  const dates = [];
-  const series = {};
-  seriesCols.forEach(c => { series[c.name] = []; });
+  blocks.forEach((block, i) => {
+    const startRow = block.headerRow;
+    const endRow = (i + 1 < blocks.length) ? blocks[i + 1].headerRow : rows.length;
+    const discipline = bestDisciplineMatch(block.name, disciplineNames);
+    blockNames.push(block.name + (discipline !== block.name ? ` → ${discipline}` : ""));
 
-  for (let r = headerRowIdx + 1; r < rows.length; r++) {
-    const row = rows[r] || [];
-    const dateVal = row[dateColIdx];
-    if (dateVal == null || String(dateVal).trim() === "") break;
-    dates.push(excelSerialToLabel(dateVal));
-    seriesCols.forEach(c => { series[c.name].push(toNumOrNull(row[c.i])); });
-  }
-  if (dates.length === 0) return null;
-  return { dates, series };
-}
-
-// Splits a { columnName: [...] } series map into Qty vs MP(Manpower) based on the column name.
-function splitQtyAndMp(series) {
-  const qty = {}, mp = {};
-  Object.keys(series).forEach(name => {
-    const n = norm(name);
-    if (/\bmp\b/.test(n) || n.includes("manpower")) {
-      const base = name.replace(/\bMP\b/gi, "").replace(/manpower/gi, "").replace(/[_\-\s]+$/, "").trim();
-      mp[base || name] = series[name];
-    } else {
-      qty[name] = series[name];
+    for (let r = startRow; r < endRow; r++) {
+      const rawLabel = String((rows[r] || [])[LABEL_COL] == null ? "" : (rows[r] || [])[LABEL_COL]).replace(/^[•\s]+/, "").trim();
+      const label = norm(rawLabel);
+      if (label === "rp_daily" || label === "rp daily") {
+        series[discipline] = dateInfo.cols.map(c => toNumOrNull(rows[r][c.col]));
+      } else if (label === "rp_cumulative" || label === "rp cumulative") {
+        cumSeries[discipline] = dateInfo.cols.map(c => toNumOrNull(rows[r][c.col]));
+      } else if (label.includes("mp resource")) {
+        mpSeries[discipline] = dateInfo.cols.map(c => toNumOrNull(rows[r][c.col]));
+      }
     }
   });
-  return { qty, mp };
+
+  if (Object.keys(series).length === 0) return null;
+  return { dates, series, cumSeries, mpSeries, blockNames };
 }
 
-// Builds data.rpDaily from the RP_D_Plan / RP_D_Actual sheets for the new Qty/MP trend +
-// Productivity combo charts. Best-effort: expects a "Date" column plus one column per
-// discipline (columns containing "MP"/"Manpower" are treated as manpower series).
-function parseRPDaily(wb) {
+// Builds data.rpDaily from the RP_D_Plan / RP_D_Actual sheets for the Qty/MP trend +
+// Productivity combo charts. disciplineNames (from the Dashboard sheet) is used to map
+// each RP block's own label (e.g. "Steel Structure Erection") to the matching discipline
+// name used everywhere else in the dashboard (e.g. "Steel Structure").
+function parseRPDaily(wb, disciplineNames) {
   const planSheetName = findSheetByAliases(wb, ["rp d plan"]);
   const actualSheetName = findSheetByAliases(wb, ["rp d actual"]);
   if (!planSheetName || !actualSheetName) {
     addMsg('"RP_D_Plan"/"RP_D_Actual" 시트를 찾지 못했습니다. Qty/MP Trend, Productivity 차트는 이전 데이터를 유지합니다.', "warn");
     return null;
   }
-  const planParsed = parseDateSeriesSheet(wb, planSheetName);
-  const actualParsed = parseDateSeriesSheet(wb, actualSheetName);
+  const planParsed = parseRPBlockSheet(wb, planSheetName, disciplineNames);
+  const actualParsed = parseRPBlockSheet(wb, actualSheetName, disciplineNames);
   if (!planParsed || !actualParsed) {
-    addMsg('"RP_D_Plan"/"RP_D_Actual" 시트에서 "Date" 헤더 행을 찾지 못했습니다. 2-1 디버그 보기로 실제 구조를 확인해서 알려주세요.', "warn");
+    addMsg('"RP_D_Plan"/"RP_D_Actual" 시트에서 날짜 헤더 행 또는 "RP_Daily"/"RP_Cumulative" 행을 찾지 못했습니다. 2-1 디버그 보기로 실제 구조를 다시 확인해서 알려주세요.', "warn");
     return null;
   }
-  const planSplit = splitQtyAndMp(planParsed.series);
-  const actualSplit = splitQtyAndMp(actualParsed.series);
-
-  addMsg(`RP_D_Plan/RP_D_Actual: ${planParsed.dates.length}일치 인식 완료 (Qty ${Object.keys(planSplit.qty).length}개, MP ${Object.keys(planSplit.mp).length}개)`, "ok");
+  if (planParsed.dates.length !== actualParsed.dates.length) {
+    addMsg(`RP_D_Plan(${planParsed.dates.length}일)과 RP_D_Actual(${actualParsed.dates.length}일)의 날짜 수가 다릅니다.`, "warn");
+  }
+  addMsg(`RP_D_Plan/RP_D_Actual: ${planParsed.dates.length}일치, discipline ${Object.keys(planParsed.series).length}개 인식 완료 (블록: ${planParsed.blockNames.join(", ")})`, "ok");
 
   return {
     dates: planParsed.dates,
-    plan: planSplit.qty,
-    actual: actualSplit.qty,
-    mpPlan: planSplit.mp,
-    mpActual: actualSplit.mp
+    plan: planParsed.series,
+    actual: actualParsed.series,
+    cumPlan: planParsed.cumSeries,
+    cumActual: actualParsed.cumSeries,
+    mpPlan: planParsed.mpSeries,
+    mpActual: actualParsed.mpSeries
   };
 }
 
@@ -568,7 +593,8 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
     const walkthroughList = parseWalkthroughSheet(wb);
     const welderStatus = parseWelderTable(rows);
     const dailyKeyActivities = parseActivitiesListAfterLabel(rows, "daily key activities");
-    const rpDaily = parseRPDaily(wb);
+    const disciplineNamesForRP = (disciplines || (previous && previous.disciplines) || []).map(d => d.name);
+    const rpDaily = parseRPDaily(wb, disciplineNamesForRP);
 
     parsedData = {
       projectInfo: (previous && previous.projectInfo) || { cutoff: "", categories: "" },
