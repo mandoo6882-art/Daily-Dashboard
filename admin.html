@@ -839,8 +839,8 @@ document.getElementById("debugBtn").addEventListener("click", () => {
 
   const rpPlanName = wb.SheetNames.find(n => norm(n) === "rp_d_plan" || norm(n).replace(/_/g, " ") === "rp d plan");
   const rpActualName = wb.SheetNames.find(n => norm(n) === "rp_d_actual" || norm(n).replace(/_/g, " ") === "rp d actual");
-  out += rpPlanName ? dumpSheet(wb, rpPlanName, 20, 25) : '[no "RP_D_Plan" sheet found]\n\n';
-  out += rpActualName ? dumpSheet(wb, rpActualName, 20, 25) : '[no "RP_D_Actual" sheet found]\n\n';
+  out += rpPlanName ? dumpSheet(wb, rpPlanName, 150, 20) : '[no "RP_D_Plan" sheet found]\n\n';
+  out += rpActualName ? dumpSheet(wb, rpActualName, 150, 20) : '[no "RP_D_Actual" sheet found]\n\n';
 
   out += dumpSheet(wb, dashSheetName, 200, 20);
 
