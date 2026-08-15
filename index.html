@@ -112,27 +112,6 @@
         </div>
       </section>
 
-      <div id="kqTrendSection">
-        <section class="card">
-          <h3>Qty Trend (Daily Plan/Actual bars + Cumulative curve, by date)</h3>
-          <div class="combo-scroll"><div class="combo-scroll-inner"><canvas id="kqQtyComboChart"></canvas></div></div>
-          <div class="combo-hint">← Scroll to see the full date range →</div>
-        </section>
-
-        <section class="card">
-          <h3>MP Trend (Daily Plan/Actual bars + Cumulative curve, by date)</h3>
-          <div class="combo-scroll"><div class="combo-scroll-inner"><canvas id="kqMpComboChart"></canvas></div></div>
-          <div class="combo-hint">← Scroll to see the full date range →</div>
-        </section>
-
-        <section class="card">
-          <h3>Productivity (Actual Qty ÷ Actual MP, by date)</h3>
-          <div class="combo-scroll"><div class="combo-scroll-inner"><canvas id="kqProductivityChart"></canvas></div></div>
-          <div class="combo-hint">← Scroll to see the full date range →</div>
-        </section>
-      </div>
-      <p id="kqTrendEmptyNote" class="placeholder-note" style="display:none;">Daily/MP trend and productivity charts will populate once RP_D_Plan / RP_D_Actual data is connected.</p>
-
       <section class="card table-card">
         <h3>Progress Status (Red = Behind / Yet)</h3>
         <div class="table-scroll">
@@ -159,18 +138,26 @@
         <select id="trendDiscSelect"></select>
       </section>
 
-      <section class="charts-row-2">
-        <div class="card chart-card">
-          <h3>RP Daily (Plan vs Actual by date)</h3>
-          <div class="chart-wrap chart-wrap-tall"><canvas id="rpDailyChart"></canvas></div>
-        </div>
-        <div class="card chart-card">
-          <h3>RP Cumulative (Plan vs Actual curve)</h3>
-          <div class="chart-wrap chart-wrap-tall"><canvas id="rpCumulativeChart"></canvas></div>
-        </div>
-      </section>
+      <div id="kqTrendSection">
+        <section class="card">
+          <h3>Qty Trend (Daily Plan/Actual bars + Cumulative curve, by date)</h3>
+          <div class="combo-scroll"><div class="combo-scroll-inner"><canvas id="kqQtyComboChart"></canvas></div></div>
+          <div class="combo-hint">← Scroll to see the full date range →</div>
+        </section>
 
-      <p id="trendEmptyNote" class="placeholder-note" style="display:none;">This section will be populated once connected to RP_D_Plan / RP_D_Actual data.</p>
+        <section class="card">
+          <h3>MP Trend (Daily Plan/Actual bars + Cumulative curve, by date)</h3>
+          <div class="combo-scroll"><div class="combo-scroll-inner"><canvas id="kqMpComboChart"></canvas></div></div>
+          <div class="combo-hint">← Scroll to see the full date range →</div>
+        </section>
+
+        <section class="card">
+          <h3>Productivity (Actual Qty ÷ Actual MP, by date)</h3>
+          <div class="combo-scroll"><div class="combo-scroll-inner"><canvas id="kqProductivityChart"></canvas></div></div>
+          <div class="combo-hint">← Scroll to see the full date range →</div>
+        </section>
+      </div>
+      <p id="kqTrendEmptyNote" class="placeholder-note" style="display:none;">This section will be populated once connected to RP_D_Plan / RP_D_Actual data.</p>
     </div>
 
     <!-- ================= ISSUE TAB ================= -->

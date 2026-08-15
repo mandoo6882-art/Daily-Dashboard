@@ -142,8 +142,6 @@ function renderSelectedDiscipline() {
   renderPlanActualBar("dailyChart", "daily", d.dailyPlan, d.dailyActual);
   renderPlanActualBar("cumulativeChart", "cumulative", d.cumPlan, d.cumActual);
   renderPlanActualBar("mpChart", "mp", d.mpPlan, d.mpActual);
-
-  renderKeyQtyTrendCharts(currentData);
 }
 
 // Cumulative sum that keeps null for any position where the source value is null/undefined
@@ -221,14 +219,13 @@ function renderProductivityChart(canvasId, key, dates, values) {
   });
 }
 
-// Below the existing Key Qty Dashboard table/bars: Qty combo chart, MP combo chart, and
-// Productivity (= Actual Qty / Actual MP), all keyed to the same discipline selector,
-// sourced from data.rpDaily (built by admin.html from the RP_D_Plan / RP_D_Actual sheets).
-function renderKeyQtyTrendCharts(data) {
+// Daily Trend tab: Qty combo chart, MP combo chart, and Productivity (= Actual Qty / Actual MP),
+// keyed to the tab's own discipline selector, sourced from data.rpDaily (built by admin.html
+// from the RP_D_Plan / RP_D_Actual sheets).
+function renderKeyQtyTrendCharts(data, disc) {
   const rp = data && data.rpDaily;
   const wrap = document.getElementById("kqTrendSection");
   const emptyNote = document.getElementById("kqTrendEmptyNote");
-  const disc = selectedDiscipline;
 
   const qtyPlan = rp && rp.plan && rp.plan[disc];
   const qtyActual = rp && rp.actual && rp.actual[disc];
@@ -378,10 +375,6 @@ function cumulativeOf(arr) {
 
 function renderTrendTab(data) {
   const sel = document.getElementById("trendDiscSelect");
-  const rp = data.rpDaily;
-  const emptyNote = document.getElementById("trendEmptyNote");
-  const chartsRow = document.querySelector("#tab-trend .charts-row-2");
-
   const names = data.disciplines.map(d => d.name);
   sel.innerHTML = names.map(n => `<option value="${n}">${n}</option>`).join("");
   if (!selectedTrendDiscipline || !names.includes(selectedTrendDiscipline)) {
@@ -390,66 +383,9 @@ function renderTrendTab(data) {
   sel.value = selectedTrendDiscipline;
   sel.onchange = () => {
     selectedTrendDiscipline = sel.value;
-    renderTrendCharts(data);
+    renderKeyQtyTrendCharts(data, selectedTrendDiscipline);
   };
-
-  if (!rp || !rp.dates || !rp.dates.length) {
-    chartsRow.style.display = "none";
-    emptyNote.style.display = "block";
-    return;
-  }
-  chartsRow.style.display = "";
-  emptyNote.style.display = "none";
-  renderTrendCharts(data);
-}
-
-function renderTrendCharts(data) {
-  const rp = data.rpDaily;
-  if (!rp || !rp.dates || !rp.dates.length) return;
-  const disc = selectedTrendDiscipline;
-  const plan = (rp.plan && rp.plan[disc]) || [];
-  const actual = (rp.actual && rp.actual[disc]) || [];
-
-  destroyChart("rpDaily");
-  const dailyCtx = document.getElementById("rpDailyChart").getContext("2d");
-  charts["rpDaily"] = new Chart(dailyCtx, {
-    type: "bar",
-    data: {
-      labels: rp.dates,
-      datasets: [
-        { label: "Plan", data: plan, backgroundColor: "#9fb3d9" },
-        { label: "Actual", data: actual, backgroundColor: "#1f3864" }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { position: "bottom" } },
-      scales: { y: { beginAtZero: true } }
-    }
-  });
-
-  const cumPlan = (rp.cumPlan && rp.cumPlan[disc]) || cumulativeOf(plan);
-  const cumActual = (rp.cumActual && rp.cumActual[disc]) || cumulativeOf(actual);
-
-  destroyChart("rpCumulative");
-  const cumCtx = document.getElementById("rpCumulativeChart").getContext("2d");
-  charts["rpCumulative"] = new Chart(cumCtx, {
-    type: "line",
-    data: {
-      labels: rp.dates,
-      datasets: [
-        { label: "Plan", data: cumPlan, borderColor: "#9fb3d9", backgroundColor: "#9fb3d9", tension: 0.3, fill: false },
-        { label: "Actual", data: cumActual, borderColor: "#1f3864", backgroundColor: "#1f3864", tension: 0.3, fill: false }
-      ]
-    },
-    options: {
-      responsive: true,
-      maintainAspectRatio: false,
-      plugins: { legend: { position: "bottom" } },
-      scales: { y: { beginAtZero: true } }
-    }
-  });
+  renderKeyQtyTrendCharts(data, selectedTrendDiscipline);
 }
 
 function renderProgressTable(disciplines) {

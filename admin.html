@@ -147,9 +147,17 @@ function parseProgressTable(rows) {
   };
   const nameCol = Math.max(cols.total - 1, 0);
   const out = [];
+  let blankStreak = 0;
   for (let r = headerRow + 1; r < rows.length; r++) {
     const nameVal = rows[r][nameCol];
-    if (nameVal == null || String(nameVal).trim() === "") break;
+    if (nameVal == null || String(nameVal).trim() === "") {
+      // Tolerate a single spacer row (e.g. a sub-header row for other columns) before
+      // concluding the table has actually ended.
+      blankStreak++;
+      if (blankStreak >= 2) break;
+      continue;
+    }
+    blankStreak = 0;
     out.push({
       name: String(nameVal).trim(),
       total: toNum(rows[r][cols.total]),
