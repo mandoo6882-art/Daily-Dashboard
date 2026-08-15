@@ -431,6 +431,102 @@ function parseActivitiesListAfterLabel(rows, labelSubstring) {
   return out.length ? out : null;
 }
 
+function findSheetByAliases(wb, aliases) {
+  return wb.SheetNames.find(n => aliases.includes(norm(n).replace(/_/g, " ")));
+}
+
+function excelSerialToLabel(v) {
+  if (v instanceof Date) return (v.getMonth() + 1) + "/" + v.getDate();
+  if (typeof v === "number" && window.XLSX && XLSX.SSF && XLSX.SSF.parse_date_code) {
+    const d = XLSX.SSF.parse_date_code(v);
+    if (d && d.m && d.d) return d.m + "/" + d.d;
+  }
+  return String(v == null ? "" : v).trim();
+}
+
+// Reads a "Date in one column, one series per other column" sheet (used for RP_D_Plan / RP_D_Actual).
+function parseDateSeriesSheet(wb, sheetName) {
+  const ws = wb.Sheets[sheetName];
+  if (!ws) return null;
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: null });
+
+  let headerRowIdx = -1, dateColIdx = -1;
+  for (let r = 0; r < Math.min(rows.length, 15); r++) {
+    const row = rows[r] || [];
+    const idx = row.findIndex(c => norm(c) === "date");
+    if (idx !== -1) { headerRowIdx = r; dateColIdx = idx; break; }
+  }
+  if (headerRowIdx === -1) return null;
+
+  const headerRow = rows[headerRowIdx];
+  const seriesCols = [];
+  headerRow.forEach((c, i) => {
+    if (i === dateColIdx) return;
+    const name = String(c == null ? "" : c).trim();
+    if (name !== "") seriesCols.push({ name, i });
+  });
+  if (seriesCols.length === 0) return null;
+
+  const dates = [];
+  const series = {};
+  seriesCols.forEach(c => { series[c.name] = []; });
+
+  for (let r = headerRowIdx + 1; r < rows.length; r++) {
+    const row = rows[r] || [];
+    const dateVal = row[dateColIdx];
+    if (dateVal == null || String(dateVal).trim() === "") break;
+    dates.push(excelSerialToLabel(dateVal));
+    seriesCols.forEach(c => { series[c.name].push(toNumOrNull(row[c.i])); });
+  }
+  if (dates.length === 0) return null;
+  return { dates, series };
+}
+
+// Splits a { columnName: [...] } series map into Qty vs MP(Manpower) based on the column name.
+function splitQtyAndMp(series) {
+  const qty = {}, mp = {};
+  Object.keys(series).forEach(name => {
+    const n = norm(name);
+    if (/\bmp\b/.test(n) || n.includes("manpower")) {
+      const base = name.replace(/\bMP\b/gi, "").replace(/manpower/gi, "").replace(/[_\-\s]+$/, "").trim();
+      mp[base || name] = series[name];
+    } else {
+      qty[name] = series[name];
+    }
+  });
+  return { qty, mp };
+}
+
+// Builds data.rpDaily from the RP_D_Plan / RP_D_Actual sheets for the new Qty/MP trend +
+// Productivity combo charts. Best-effort: expects a "Date" column plus one column per
+// discipline (columns containing "MP"/"Manpower" are treated as manpower series).
+function parseRPDaily(wb) {
+  const planSheetName = findSheetByAliases(wb, ["rp d plan"]);
+  const actualSheetName = findSheetByAliases(wb, ["rp d actual"]);
+  if (!planSheetName || !actualSheetName) {
+    addMsg('"RP_D_Plan"/"RP_D_Actual" 시트를 찾지 못했습니다. Qty/MP Trend, Productivity 차트는 이전 데이터를 유지합니다.', "warn");
+    return null;
+  }
+  const planParsed = parseDateSeriesSheet(wb, planSheetName);
+  const actualParsed = parseDateSeriesSheet(wb, actualSheetName);
+  if (!planParsed || !actualParsed) {
+    addMsg('"RP_D_Plan"/"RP_D_Actual" 시트에서 "Date" 헤더 행을 찾지 못했습니다. 2-1 디버그 보기로 실제 구조를 확인해서 알려주세요.', "warn");
+    return null;
+  }
+  const planSplit = splitQtyAndMp(planParsed.series);
+  const actualSplit = splitQtyAndMp(actualParsed.series);
+
+  addMsg(`RP_D_Plan/RP_D_Actual: ${planParsed.dates.length}일치 인식 완료 (Qty ${Object.keys(planSplit.qty).length}개, MP ${Object.keys(planSplit.mp).length}개)`, "ok");
+
+  return {
+    dates: planParsed.dates,
+    plan: planSplit.qty,
+    actual: actualSplit.qty,
+    mpPlan: planSplit.mp,
+    mpActual: actualSplit.mp
+  };
+}
+
 async function getPreviousData() {
   try {
     const res = await fetch("./data.json", { cache: "no-store" });
@@ -472,10 +568,12 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
     const walkthroughList = parseWalkthroughSheet(wb);
     const welderStatus = parseWelderTable(rows);
     const dailyKeyActivities = parseActivitiesListAfterLabel(rows, "daily key activities");
+    const rpDaily = parseRPDaily(wb);
 
     parsedData = {
       projectInfo: (previous && previous.projectInfo) || { cutoff: "", categories: "" },
       dailyKeyActivities: dailyKeyActivities || (previous && previous.dailyKeyActivities) || [],
+      rpDaily: rpDaily || (previous && previous.rpDaily) || null,
       welderStatus: welderStatus || (previous && previous.welderStatus) || [],
       disciplines: disciplines || (previous && previous.disciplines) || [],
       issueSummary: issueSummary || (previous && previous.issueSummary) || [],

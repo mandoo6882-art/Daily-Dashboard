@@ -142,6 +142,129 @@ function renderSelectedDiscipline() {
   renderPlanActualBar("dailyChart", "daily", d.dailyPlan, d.dailyActual);
   renderPlanActualBar("cumulativeChart", "cumulative", d.cumPlan, d.cumActual);
   renderPlanActualBar("mpChart", "mp", d.mpPlan, d.mpActual);
+
+  renderKeyQtyTrendCharts(currentData);
+}
+
+// Cumulative sum that keeps null for any position where the source value is null/undefined
+// (used for Actual series so the line doesn't flatten to "0" once real data runs out).
+function cumulativeOfSkippingNulls(arr) {
+  let sum = 0;
+  return (arr || []).map(v => {
+    if (v == null) return null;
+    sum += Number(v) || 0;
+    return sum;
+  });
+}
+
+// Widens the scrollable inner wrapper so there's ~26px per date point (min = visible width),
+// which is what makes the horizontal scrollbar appear once there are many dates.
+function sizeComboScrollInner(canvasId, pointCount) {
+  const inner = document.getElementById(canvasId).parentElement;
+  const outer = inner.parentElement;
+  const visibleWidth = (outer && outer.clientWidth) || 600;
+  inner.style.width = Math.max(pointCount * 26, visibleWidth) + "px";
+}
+
+// Combo chart: two bar series (Daily Plan/Actual) on the left axis + two line series
+// (Cumulative Plan/Actual) on the right axis, matching the original Excel chart style.
+function renderComboChart(canvasId, key, dates, planLabel, planData, actualLabel, actualData,
+                           cumPlanLabel, cumPlanData, cumActualLabel, cumActualData,
+                           leftAxisTitle, rightAxisTitle) {
+  destroyChart(key);
+  sizeComboScrollInner(canvasId, dates.length);
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  charts[key] = new Chart(ctx, {
+    data: {
+      labels: dates,
+      datasets: [
+        { type: "bar", label: planLabel, data: planData, backgroundColor: "#b7bec9", yAxisID: "y", order: 2, barPercentage: 0.9, categoryPercentage: 0.9 },
+        { type: "bar", label: actualLabel, data: actualData, backgroundColor: "#eb8a3d", yAxisID: "y", order: 1, barPercentage: 0.9, categoryPercentage: 0.9 },
+        { type: "line", label: cumPlanLabel, data: cumPlanData, borderColor: "#2a78d6", backgroundColor: "#2a78d6", yAxisID: "y1", tension: 0.2, borderWidth: 2, pointRadius: 1.5, order: 0 },
+        { type: "line", label: cumActualLabel, data: cumActualData, borderColor: "#f0c419", backgroundColor: "#f0c419", yAxisID: "y1", tension: 0.2, borderWidth: 2, pointRadius: 1.5, order: 0 }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: "top", labels: { boxWidth: 10, font: { size: 10 } } } },
+      scales: {
+        x: { ticks: { font: { size: 8 }, maxRotation: 90, minRotation: 90 } },
+        y: { position: "left", beginAtZero: true, title: { display: true, text: leftAxisTitle, font: { size: 10 } }, ticks: { font: { size: 9 } } },
+        y1: { position: "right", beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: rightAxisTitle, font: { size: 10 } }, ticks: { font: { size: 9 } } }
+      }
+    }
+  });
+}
+
+function renderProductivityChart(canvasId, key, dates, values) {
+  destroyChart(key);
+  sizeComboScrollInner(canvasId, dates.length);
+  const ctx = document.getElementById(canvasId).getContext("2d");
+  charts[key] = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: dates,
+      datasets: [
+        { label: "Productivity (Actual Qty / Actual MP)", data: values, borderColor: "#1baf7a", backgroundColor: "#1baf7a", tension: 0.2, borderWidth: 2, pointRadius: 1.5, spanGaps: false }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: { legend: { position: "top", labels: { boxWidth: 10, font: { size: 10 } } } },
+      scales: {
+        x: { ticks: { font: { size: 8 }, maxRotation: 90, minRotation: 90 } },
+        y: { beginAtZero: true, ticks: { font: { size: 9 } } }
+      }
+    }
+  });
+}
+
+// Below the existing Key Qty Dashboard table/bars: Qty combo chart, MP combo chart, and
+// Productivity (= Actual Qty / Actual MP), all keyed to the same discipline selector,
+// sourced from data.rpDaily (built by admin.html from the RP_D_Plan / RP_D_Actual sheets).
+function renderKeyQtyTrendCharts(data) {
+  const rp = data && data.rpDaily;
+  const wrap = document.getElementById("kqTrendSection");
+  const emptyNote = document.getElementById("kqTrendEmptyNote");
+  const disc = selectedDiscipline;
+
+  const qtyPlan = rp && rp.plan && rp.plan[disc];
+  const qtyActual = rp && rp.actual && rp.actual[disc];
+
+  if (!rp || !rp.dates || !rp.dates.length || !qtyPlan) {
+    wrap.style.display = "none";
+    emptyNote.style.display = "block";
+    return;
+  }
+  wrap.style.display = "";
+  emptyNote.style.display = "none";
+
+  const dates = rp.dates;
+  const cumQtyPlan = (rp.cumPlan && rp.cumPlan[disc]) || cumulativeOf(qtyPlan);
+  const cumQtyActual = (rp.cumActual && rp.cumActual[disc]) || cumulativeOfSkippingNulls(qtyActual);
+
+  renderComboChart("kqQtyComboChart", "kqQtyCombo", dates,
+    "Plan_Daily", qtyPlan, "Actual_Daily", qtyActual || [],
+    "Plan_Cumulative", cumQtyPlan, "Actual_Cumulative", cumQtyActual,
+    "Daily Qty", "Cumulative Qty");
+
+  const mpPlan = (rp.mpPlan && rp.mpPlan[disc]) || [];
+  const mpActual = (rp.mpActual && rp.mpActual[disc]) || [];
+  const cumMpPlan = (rp.mpCumPlan && rp.mpCumPlan[disc]) || cumulativeOf(mpPlan);
+  const cumMpActual = (rp.mpCumActual && rp.mpCumActual[disc]) || cumulativeOfSkippingNulls(mpActual);
+
+  renderComboChart("kqMpComboChart", "kqMpCombo", dates,
+    "MP Plan_Daily", mpPlan, "MP Actual_Daily", mpActual,
+    "MP Plan_Cumulative", cumMpPlan, "MP Actual_Cumulative", cumMpActual,
+    "Daily MP", "Cumulative MP");
+
+  const productivity = (qtyActual || []).map((v, i) => {
+    const mp = mpActual[i];
+    return (v != null && mp) ? Math.round((v / mp) * 1000) / 1000 : null;
+  });
+  renderProductivityChart("kqProductivityChart", "kqProductivity", dates, productivity);
 }
 
 function renderDailyActivities(data) {
