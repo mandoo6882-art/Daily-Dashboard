@@ -295,15 +295,38 @@ function renderPie(canvasId, key, labels, values) {
   });
 }
 
-function renderIssueList(list) {
-  const listBody = document.querySelector("#issueListTable tbody");
-  listBody.innerHTML = "";
-  list.forEach(r => {
+// Renders a generic { columns: [...], filterColumn: "...", rows: [...] } list into a table,
+// with header built dynamically from whatever columns were actually found in the sheet.
+function renderGenericList(tableId, countId, listObj, filteredRows) {
+  const table = document.getElementById(tableId);
+  const thead = table.querySelector("thead");
+  const tbody = table.querySelector("tbody");
+  const columns = (listObj && listObj.columns) || [];
+  const rows = filteredRows || (listObj && listObj.rows) || [];
+
+  thead.innerHTML = "";
+  if (columns.length) {
+    const trHead = document.createElement("tr");
+    columns.forEach(c => {
+      const th = document.createElement("th");
+      th.textContent = c;
+      trHead.appendChild(th);
+    });
+    thead.appendChild(trHead);
+  }
+
+  tbody.innerHTML = "";
+  rows.forEach(r => {
     const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${r.no}</td><td>${r.title}</td><td>${r.discipline}</td><td>${r.dueDate}</td><td>${r.status}</td>`;
-    listBody.appendChild(tr);
+    columns.forEach(c => {
+      const td = document.createElement("td");
+      td.textContent = r[c] != null ? r[c] : "";
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
   });
-  document.getElementById("issueCount").textContent = list.length + " item(s)";
+
+  document.getElementById(countId).textContent = rows.length + " item(s)";
 }
 
 function renderIssueSection(data) {
@@ -318,26 +341,25 @@ function renderIssueSection(data) {
     data.issueSummary.map(r => r.discipline),
     data.issueSummary.map(r => r.open));
 
+  const listObj = data.issueList || { columns: [], filterColumn: null, rows: [] };
+  const filterRow = document.getElementById("issueFilterRow");
   const filter = document.getElementById("issueFilter");
-  const disciplines = Array.from(new Set(data.issueList.map(r => r.discipline).filter(Boolean))).sort();
-  filter.innerHTML = '<option value="">All Disciplines</option>' +
-    disciplines.map(d => `<option value="${d}">${d}</option>`).join("");
-  filter.onchange = () => {
-    const v = filter.value;
-    renderIssueList(v ? data.issueList.filter(r => r.discipline === v) : data.issueList);
-  };
-  renderIssueList(data.issueList);
-}
 
-function renderWalkthroughList(list) {
-  const listBody = document.querySelector("#walkthroughListTable tbody");
-  listBody.innerHTML = "";
-  list.forEach(r => {
-    const tr = document.createElement("tr");
-    tr.innerHTML = `<td>${r.no}</td><td>${r.unit}</td><td>${r.item}</td><td>${r.responsibility}</td><td>${r.dueDate}</td><td>${r.status}</td>`;
-    listBody.appendChild(tr);
-  });
-  document.getElementById("walkthroughCount").textContent = list.length + " item(s)";
+  if (listObj.filterColumn) {
+    filterRow.style.display = "";
+    document.querySelector('label[for="issueFilter"]').textContent = "Filter by " + listObj.filterColumn;
+    const values = Array.from(new Set(listObj.rows.map(r => r[listObj.filterColumn]).filter(Boolean))).sort();
+    filter.innerHTML = '<option value="">All</option>' + values.map(v => `<option value="${v}">${v}</option>`).join("");
+    filter.onchange = () => {
+      const v = filter.value;
+      const filtered = v ? listObj.rows.filter(r => r[listObj.filterColumn] === v) : listObj.rows;
+      renderGenericList("issueListTable", "issueCount", listObj, filtered);
+    };
+  } else {
+    filterRow.style.display = "none";
+  }
+
+  renderGenericList("issueListTable", "issueCount", listObj, listObj.rows);
 }
 
 function renderWalkthroughSection(data) {
@@ -352,15 +374,25 @@ function renderWalkthroughSection(data) {
     data.walkthroughSummary.map(r => r.responsibility),
     data.walkthroughSummary.map(r => r.open));
 
+  const listObj = data.walkthroughList || { columns: [], filterColumn: null, rows: [] };
+  const filterRow = document.getElementById("walkthroughFilterRow");
   const filter = document.getElementById("walkthroughFilter");
-  const resps = Array.from(new Set(data.walkthroughList.map(r => r.responsibility).filter(Boolean))).sort();
-  filter.innerHTML = '<option value="">All Responsibilities</option>' +
-    resps.map(r => `<option value="${r}">${r}</option>`).join("");
-  filter.onchange = () => {
-    const v = filter.value;
-    renderWalkthroughList(v ? data.walkthroughList.filter(r => r.responsibility === v) : data.walkthroughList);
-  };
-  renderWalkthroughList(data.walkthroughList);
+
+  if (listObj.filterColumn) {
+    filterRow.style.display = "";
+    document.querySelector('label[for="walkthroughFilter"]').textContent = "Filter by " + listObj.filterColumn;
+    const values = Array.from(new Set(listObj.rows.map(r => r[listObj.filterColumn]).filter(Boolean))).sort();
+    filter.innerHTML = '<option value="">All</option>' + values.map(v => `<option value="${v}">${v}</option>`).join("");
+    filter.onchange = () => {
+      const v = filter.value;
+      const filtered = v ? listObj.rows.filter(r => r[listObj.filterColumn] === v) : listObj.rows;
+      renderGenericList("walkthroughListTable", "walkthroughCount", listObj, filtered);
+    };
+  } else {
+    filterRow.style.display = "none";
+  }
+
+  renderGenericList("walkthroughListTable", "walkthroughCount", listObj, listObj.rows);
 }
 
 function showErrorBanner(message) {

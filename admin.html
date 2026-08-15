@@ -253,101 +253,79 @@ function isClosed(statusText) {
   return t.includes("closed") || t.includes("complete") || t.includes("done");
 }
 
-function parseIssueSheet(wb) {
-  const sheetName = wb.SheetNames.find(n => norm(n) === "issue");
-  if (!sheetName) {
-    addMsg('"Issue" 시트를 찾지 못했습니다.', "warn");
+function guessColumn(headers, aliases) {
+  for (const h of headers) {
+    const n = norm(h);
+    if (aliases.some(a => n.includes(norm(a)))) return h;
+  }
+  return null;
+}
+
+// Reads a sheet generically: whatever the header row's columns are, keep them all as-is.
+// This guarantees the FULL list comes through even if we don't know exact column names in advance.
+function parseGenericSheetFull(wb, sheetName, label) {
+  const sn = wb.SheetNames.find(n => norm(n) === norm(sheetName));
+  if (!sn) {
+    addMsg(`"${sheetName}" 시트를 찾지 못했습니다.`, "warn");
     return null;
   }
-  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: "" });
-  const aliasGroups = {
-    no: ["no", "no.", "item no", "issue no"],
-    unit: ["unit", "train", "area"],
-    discipline: ["discipline"],
-    title: ["title", "description", "issue", "item", "remarks"],
-    dueDate: ["due date", "duedate", "date"],
-    status: ["status"]
-  };
-  const best = findFlexibleHeader(rows, aliasGroups, 15);
-  if (best.rowIdx === -1 || best.score < 3 || best.colMap.status == null) {
-    addMsg('"Issue" 시트에서 표 헤더를 찾지 못했습니다 (No/Discipline/Title/Due Date/Status 필요). 이전 값을 유지합니다.', "warn");
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: "" });
+
+  let headerRowIdx = -1;
+  for (let r = 0; r < Math.min(rows.length, 10); r++) {
+    if (rows[r].filter(c => String(c).trim() !== "").length >= 2) { headerRowIdx = r; break; }
+  }
+  if (headerRowIdx === -1) {
+    addMsg(`"${sheetName}" 시트에서 헤더 행을 찾지 못했습니다.`, "warn");
     return null;
   }
-  const cols = best.colMap;
-  const anchorCol = cols.no != null ? cols.no : cols.status;
-  const out = [];
+  const headerRow = rows[headerRowIdx];
+  let startCol = headerRow.findIndex(c => String(c).trim() !== "");
+  let endCol = headerRow.length - 1;
+  while (endCol > startCol && String(headerRow[endCol]).trim() === "") endCol--;
+  const headers = [];
+  for (let c = startCol; c <= endCol; c++) headers.push(String(headerRow[c] || ("Col" + c)).trim());
+
+  const statusCol = guessColumn(headers, ["status"]);
+  let blankStreak = 0;
+  const rawRows = [];
+  for (let r = headerRowIdx + 1; r < rows.length; r++) {
+    const vals = headers.map((h, i) => rows[r][startCol + i]);
+    const rowIsEmpty = vals.every(v => String(v == null ? "" : v).trim() === "");
+    if (rowIsEmpty) { blankStreak++; if (blankStreak >= 3) break; continue; }
+    blankStreak = 0;
+    const obj = {};
+    headers.forEach((h, i) => { obj[h] = String(vals[i] == null ? "" : vals[i]).trim(); });
+    rawRows.push(obj);
+  }
+
   let excluded = 0;
-  for (let r = best.rowIdx + 1; r < rows.length; r++) {
-    const anchorVal = rows[r][anchorCol];
-    const rowIsEmpty = rows[r].every(c => String(c).trim() === "");
-    if (rowIsEmpty) break;
-    if (anchorVal == null || String(anchorVal).trim() === "") continue;
-    const statusVal = cols.status != null ? rows[r][cols.status] : "";
-    if (isClosed(statusVal)) { excluded++; continue; }
-    out.push({
-      no: cols.no != null ? rows[r][cols.no] : out.length + 1,
-      unit: cols.unit != null ? String(rows[r][cols.unit]).trim() : "",
-      title: cols.title != null ? String(rows[r][cols.title]).trim() : "",
-      discipline: cols.discipline != null ? String(rows[r][cols.discipline]).trim() : "",
-      dueDate: cols.dueDate != null ? String(rows[r][cols.dueDate]).trim() : "",
-      status: cols.status != null ? String(rows[r][cols.status]).trim() : ""
-    });
+  const kept = rawRows.filter(r => {
+    if (!statusCol) return true;
+    if (isClosed(r[statusCol])) { excluded++; return false; }
+    return true;
+  });
+
+  if (kept.length === 0) {
+    addMsg(`"${sheetName}" 시트 헤더는 찾았지만 표시할 항목이 없습니다.`, "warn");
+    return { columns: headers, filterColumn: null, rows: [] };
   }
-  if (out.length === 0) {
-    addMsg('"Issue" 시트 헤더는 찾았지만 표시할 항목이 없습니다 (모두 Closed 이거나 데이터 없음).', "warn");
-    return [];
-  }
-  addMsg(`Issue 상세 목록: ${out.length}건 인식 완료 (Closed ${excluded}건 제외)`, "ok");
-  return out;
+  addMsg(`${label}: ${kept.length}건 인식 완료 (컬럼: ${headers.join(", ")}${statusCol ? `, Closed ${excluded}건 제외` : ""})`, "ok");
+  return { columns: headers, filterColumn: null, rows: kept, _statusCol: statusCol };
+}
+
+function parseIssueSheet(wb) {
+  const result = parseGenericSheetFull(wb, "issue", "Issue 상세 목록");
+  if (!result) return null;
+  result.filterColumn = guessColumn(result.columns, ["discipline"]);
+  return result;
 }
 
 function parseWalkthroughSheet(wb) {
-  const sheetName = wb.SheetNames.find(n => norm(n) === "walkthrough");
-  if (!sheetName) {
-    addMsg('"Walkthrough" 시트를 찾지 못했습니다.', "warn");
-    return null;
-  }
-  const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { header: 1, defval: "" });
-  const aliasGroups = {
-    no: ["no", "no."],
-    unit: ["unit", "train", "area"],
-    date: ["date", "found date"],
-    item: ["item", "description", "title"],
-    responsibility: ["responsibility", "responsible"],
-    dueDate: ["due date", "duedate"],
-    status: ["status"]
-  };
-  const best = findFlexibleHeader(rows, aliasGroups, 15);
-  if (best.rowIdx === -1 || best.score < 3 || best.colMap.status == null) {
-    addMsg('"Walkthrough" 시트에서 표 헤더를 찾지 못했습니다 (No/Responsibility/Item/Due Date/Status 필요). 이전 값을 유지합니다.', "warn");
-    return null;
-  }
-  const cols = best.colMap;
-  const anchorCol = cols.no != null ? cols.no : cols.status;
-  const out = [];
-  let excluded = 0;
-  for (let r = best.rowIdx + 1; r < rows.length; r++) {
-    const anchorVal = rows[r][anchorCol];
-    const rowIsEmpty = rows[r].every(c => String(c).trim() === "");
-    if (rowIsEmpty) break;
-    if (anchorVal == null || String(anchorVal).trim() === "") continue;
-    const statusVal = cols.status != null ? rows[r][cols.status] : "";
-    if (isClosed(statusVal)) { excluded++; continue; }
-    out.push({
-      no: cols.no != null ? rows[r][cols.no] : out.length + 1,
-      unit: cols.unit != null ? String(rows[r][cols.unit]).trim() : "",
-      item: cols.item != null ? String(rows[r][cols.item]).trim() : "",
-      responsibility: cols.responsibility != null ? String(rows[r][cols.responsibility]).trim() : "",
-      dueDate: cols.dueDate != null ? String(rows[r][cols.dueDate]).trim() : "",
-      status: cols.status != null ? String(rows[r][cols.status]).trim() : ""
-    });
-  }
-  if (out.length === 0) {
-    addMsg('"Walkthrough" 시트 헤더는 찾았지만 표시할 항목이 없습니다 (모두 Closed 이거나 데이터 없음).', "warn");
-    return [];
-  }
-  addMsg(`Walkthrough 상세 목록: ${out.length}건 인식 완료 (Closed ${excluded}건 제외)`, "ok");
-  return out;
+  const result = parseGenericSheetFull(wb, "walkthrough", "Walkthrough 상세 목록");
+  if (!result) return null;
+  result.filterColumn = guessColumn(result.columns, ["responsibility", "responsible"]);
+  return result;
 }
 
 function findLabelRow(rows, labelSubstring, maxScanRows) {

@@ -34,17 +34,21 @@
     { "discipline": "CPM", "total": 1, "done": 1, "open": 0 },
     { "discipline": "All", "total": 1, "done": 0, "open": 1 }
   ],
-  "issueList": [
-    { "no": 2, "unit": "All", "title": "PKG4 Cat IV Fence in west", "discipline": "IM", "dueDate": "2026-07-15", "status": "Open" },
-    { "no": 4, "unit": "All", "title": "PKG4 Overbridge in Train 7", "discipline": "IM", "dueDate": "2026-07-15", "status": "Open" },
-    { "no": 6, "unit": "All", "title": "SCOT Regenerator Dress-up (Train 7)", "discipline": "Mechanical", "dueDate": "2026-08-10", "status": "Open" },
-    { "no": 8, "unit": "All", "title": "Refractory Lining for Incinerator Stack (Train 7)", "discipline": "Mechanical", "dueDate": "2026-09-14", "status": "Open" },
-    { "no": 9, "unit": "All", "title": "Incinerator Stack Delivery (Train 8/9)", "discipline": "Mechanical", "dueDate": "2026-08-22", "status": "Open" },
-    { "no": 10, "unit": "All", "title": "Site Constraints for Equipment Operations Due to Interface Issue", "discipline": "All", "dueDate": "2026-09-30", "status": "Open" },
-    { "no": 11, "unit": "All", "title": "Sulfur Pit Lining Schedule", "discipline": "Civil / Piping", "dueDate": "2026-08-15", "status": "Open" },
-    { "no": 13, "unit": "All", "title": "Solvent Trench Schedule Monitoring", "discipline": "Civil", "dueDate": "2026-09-28", "status": "Open" },
-    { "no": 15, "unit": "All", "title": "Critical Milestone for Completion of All P/R", "discipline": "Steel Structure", "dueDate": "2026-08-31", "status": "Open" }
-  ],
+  "issueList": {
+    "columns": ["No", "Unit", "Title", "Discipline", "Due Date", "Status"],
+    "filterColumn": "Discipline",
+    "rows": [
+      { "No": "2", "Unit": "All", "Title": "PKG4 Cat IV Fence in west", "Discipline": "IM", "Due Date": "2026-07-15", "Status": "Open" },
+      { "No": "4", "Unit": "All", "Title": "PKG4 Overbridge in Train 7", "Discipline": "IM", "Due Date": "2026-07-15", "Status": "Open" },
+      { "No": "6", "Unit": "All", "Title": "SCOT Regenerator Dress-up (Train 7)", "Discipline": "Mechanical", "Due Date": "2026-08-10", "Status": "Open" },
+      { "No": "8", "Unit": "All", "Title": "Refractory Lining for Incinerator Stack (Train 7)", "Discipline": "Mechanical", "Due Date": "2026-09-14", "Status": "Open" },
+      { "No": "9", "Unit": "All", "Title": "Incinerator Stack Delivery (Train 8/9)", "Discipline": "Mechanical", "Due Date": "2026-08-22", "Status": "Open" },
+      { "No": "10", "Unit": "All", "Title": "Site Constraints for Equipment Operations Due to Interface Issue", "Discipline": "All", "Due Date": "2026-09-30", "Status": "Open" },
+      { "No": "11", "Unit": "All", "Title": "Sulfur Pit Lining Schedule", "Discipline": "Civil / Piping", "Due Date": "2026-08-15", "Status": "Open" },
+      { "No": "13", "Unit": "All", "Title": "Solvent Trench Schedule Monitoring", "Discipline": "Civil", "Due Date": "2026-09-28", "Status": "Open" },
+      { "No": "15", "Unit": "All", "Title": "Critical Milestone for Completion of All P/R", "Discipline": "Steel Structure", "Due Date": "2026-08-31", "Status": "Open" }
+    ]
+  },
   "walkthroughSummary": [
     { "responsibility": "SFEC", "total": 136, "done": 67, "open": 69 },
     { "responsibility": "NBTC", "total": 127, "done": 78, "open": 49 },
@@ -54,13 +58,17 @@
     { "responsibility": "GS", "total": 7, "done": 0, "open": 7 },
     { "responsibility": "COMPANY", "total": 1, "done": 0, "open": 1 }
   ],
-  "walkthroughList": [
-    { "no": 15, "unit": "Train 9", "date": "2026-06-03", "item": "T9 - Piping Work", "responsibility": "NBTC", "dueDate": "2026-06-09", "status": "Ongoing" },
-    { "no": 16, "unit": "Train 9", "date": "2026-06-03", "item": "T9 - TS001 installation of handrails", "responsibility": "NBTC/SFEC", "dueDate": "2026-07-08", "status": "Ongoing" },
-    { "no": 29, "unit": "Train 8", "date": "2026-06-04", "item": "TS-003 Steel Structure", "responsibility": "NBTC/SFEC", "dueDate": "2026-06-07", "status": "Latest update" },
-    { "no": 41, "unit": "Train 8", "date": "2026-06-04", "item": "U/G MDEA line work and Trench Coating Work", "responsibility": "NBTC", "dueDate": "2026-06-10", "status": "-" },
-    { "no": 59, "unit": "Train 8", "date": "2026-06-11", "item": "TS001 - Handrail", "responsibility": "NBTC", "dueDate": "2026-07-15", "status": "To be continued" },
-    { "no": 60, "unit": "Train 8", "date": "2026-06-11", "item": "SFEC to finish coating for pipe trench", "responsibility": "SFEC", "dueDate": "2026-06-18", "status": "Ongoing" },
-    { "no": 61, "unit": "Train 8", "date": "2026-06-11", "item": "Backfill", "responsibility": "SFEC", "dueDate": "2026-06-13", "status": "Started Jul 5" }
-  ]
+  "walkthroughList": {
+    "columns": ["No", "Unit", "Date", "Item", "Responsibility", "Due Date", "Status"],
+    "filterColumn": "Responsibility",
+    "rows": [
+      { "No": "15", "Unit": "Train 9", "Date": "2026-06-03", "Item": "T9 - Piping Work", "Responsibility": "NBTC", "Due Date": "2026-06-09", "Status": "Ongoing" },
+      { "No": "16", "Unit": "Train 9", "Date": "2026-06-03", "Item": "T9 - TS001 installation of handrails", "Responsibility": "NBTC/SFEC", "Due Date": "2026-07-08", "Status": "Ongoing" },
+      { "No": "29", "Unit": "Train 8", "Date": "2026-06-04", "Item": "TS-003 Steel Structure", "Responsibility": "NBTC/SFEC", "Due Date": "2026-06-07", "Status": "Latest update" },
+      { "No": "41", "Unit": "Train 8", "Date": "2026-06-04", "Item": "U/G MDEA line work and Trench Coating Work", "Responsibility": "NBTC", "Due Date": "2026-06-10", "Status": "-" },
+      { "No": "59", "Unit": "Train 8", "Date": "2026-06-11", "Item": "TS001 - Handrail", "Responsibility": "NBTC", "Due Date": "2026-07-15", "Status": "To be continued" },
+      { "No": "60", "Unit": "Train 8", "Date": "2026-06-11", "Item": "SFEC to finish coating for pipe trench", "Responsibility": "SFEC", "Due Date": "2026-06-18", "Status": "Ongoing" },
+      { "No": "61", "Unit": "Train 8", "Date": "2026-06-11", "Item": "Backfill", "Responsibility": "SFEC", "Due Date": "2026-06-13", "Status": "Started Jul 5" }
+    ]
+  }
 }
