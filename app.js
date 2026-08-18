@@ -50,6 +50,13 @@ async function loadData() {
   return MOCK_DATA;
 }
 
+// Rounds to a whole number before formatting with thousands separators — the dashboard
+// should never show decimals, even though the source Excel formulas often produce them.
+function fmtInt(n) {
+  if (n == null || n === "" || isNaN(n)) return "-";
+  return Math.round(Number(n)).toLocaleString();
+}
+
 function statusClass(status) {
   if (status === "Ahead") return "ahead";
   if (status === "Behind") return "behind";
@@ -114,36 +121,36 @@ function renderSelectedDiscipline() {
   const d = currentData.disciplines.find(x => x.name === selectedDiscipline);
   if (!d) return;
 
-  const pct = d.total > 0 ? Math.round((d.completed / d.total) * 1000) / 10 : 0;
+  const pct = d.total > 0 ? Math.round((d.completed / d.total) * 100) : 0;
   const bar = document.getElementById("overallProgressBar");
   bar.style.width = Math.min(pct, 100) + "%";
   bar.textContent = pct + "%";
-  document.getElementById("kpiTotal").textContent = "Total " + d.total.toLocaleString();
-  document.getElementById("kpiCompleted").textContent = "Completed " + d.completed.toLocaleString();
-  document.getElementById("kpiRemaining").textContent = "Remaining " + d.remaining.toLocaleString();
-  document.getElementById("kpiMpActual").textContent = d.mpActual != null ? d.mpActual.toLocaleString() : "-";
-  document.getElementById("kpiMpPlan").textContent = d.mpPlan != null ? d.mpPlan.toLocaleString() : "-";
+  document.getElementById("kpiTotal").textContent = "Total " + fmtInt(d.total);
+  document.getElementById("kpiCompleted").textContent = "Completed " + fmtInt(d.completed);
+  document.getElementById("kpiRemaining").textContent = "Remaining " + fmtInt(d.remaining);
+  document.getElementById("kpiMpActual").textContent = fmtInt(d.mpActual);
+  document.getElementById("kpiMpPlan").textContent = fmtInt(d.mpPlan);
 
   const badge = document.getElementById("kpiStatusBadge");
   badge.textContent = d.status;
   badge.className = "badge " + statusClass(d.status);
 
-  document.getElementById("sTotal").textContent = d.total.toLocaleString();
-  document.getElementById("sCompleted").textContent = d.completed.toLocaleString();
-  document.getElementById("sRemaining").textContent = d.remaining.toLocaleString();
-  document.getElementById("sDailyPlan").textContent = d.dailyPlan.toLocaleString();
-  document.getElementById("sDailyActual").textContent = d.dailyActual.toLocaleString();
+  document.getElementById("sTotal").textContent = fmtInt(d.total);
+  document.getElementById("sCompleted").textContent = fmtInt(d.completed);
+  document.getElementById("sRemaining").textContent = fmtInt(d.remaining);
+  document.getElementById("sDailyPlan").textContent = fmtInt(d.dailyPlan);
+  document.getElementById("sDailyActual").textContent = fmtInt(d.dailyActual);
   const dailyVarEl = document.getElementById("sDailyVar");
-  dailyVarEl.textContent = d.dailyVar.toLocaleString();
+  dailyVarEl.textContent = fmtInt(d.dailyVar);
   dailyVarEl.style.color = d.dailyVar < 0 ? "#c0392b" : (d.dailyVar > 0 ? "#1f5fa5" : "");
-  document.getElementById("sCumPlan").textContent = d.cumPlan.toLocaleString();
-  document.getElementById("sCumActual").textContent = d.cumActual.toLocaleString();
+  document.getElementById("sCumPlan").textContent = fmtInt(d.cumPlan);
+  document.getElementById("sCumActual").textContent = fmtInt(d.cumActual);
   const cumVarEl = document.getElementById("sCumVar");
-  cumVarEl.textContent = d.cumVar.toLocaleString();
+  cumVarEl.textContent = fmtInt(d.cumVar);
   cumVarEl.style.color = d.cumVar < 0 ? "#c0392b" : (d.cumVar > 0 ? "#1f5fa5" : "");
   document.getElementById("sProgressPct").textContent = pct + "%";
-  document.getElementById("sMpPlan").textContent = d.mpPlan != null ? d.mpPlan.toLocaleString() : "-";
-  document.getElementById("sMpActual").textContent = d.mpActual != null ? d.mpActual.toLocaleString() : "-";
+  document.getElementById("sMpPlan").textContent = fmtInt(d.mpPlan);
+  document.getElementById("sMpActual").textContent = fmtInt(d.mpActual);
 
   renderPlanActualBar("dailyChart", "daily", d.dailyPlan, d.dailyActual);
   renderPlanActualBar("cumulativeChart", "cumulative", d.cumPlan, d.cumActual);
@@ -455,20 +462,19 @@ function renderProgressTable(disciplines) {
   tbody.innerHTML = "";
   disciplines.forEach(d => {
     const tr = document.createElement("tr");
-    tr.className = "status-" + statusClass(d.status);
     tr.innerHTML = `
       <td>${d.name}</td>
-      <td>${d.total.toLocaleString()}</td>
-      <td>${d.completed.toLocaleString()}</td>
-      <td>${d.remaining.toLocaleString()}</td>
-      <td>${d.dailyPlan.toLocaleString()}</td>
-      <td>${d.dailyActual.toLocaleString()}</td>
-      <td>${d.dailyVar.toLocaleString()}</td>
-      <td>${d.cumPlan.toLocaleString()}</td>
-      <td>${d.cumActual.toLocaleString()}</td>
-      <td>${d.cumVar.toLocaleString()}</td>
-      <td>${d.mpPlan != null ? d.mpPlan.toLocaleString() : "-"}</td>
-      <td>${d.mpActual != null ? d.mpActual.toLocaleString() : "-"}</td>
+      <td>${fmtInt(d.total)}</td>
+      <td>${fmtInt(d.completed)}</td>
+      <td>${fmtInt(d.remaining)}</td>
+      <td>${fmtInt(d.dailyPlan)}</td>
+      <td>${fmtInt(d.dailyActual)}</td>
+      <td>${fmtInt(d.dailyVar)}</td>
+      <td>${fmtInt(d.cumPlan)}</td>
+      <td>${fmtInt(d.cumActual)}</td>
+      <td>${fmtInt(d.cumVar)}</td>
+      <td>${fmtInt(d.mpPlan)}</td>
+      <td>${fmtInt(d.mpActual)}</td>
       <td><span class="badge ${statusClass(d.status)}">${d.status}</span></td>
     `;
     tbody.appendChild(tr);
@@ -489,7 +495,7 @@ function renderKeyQty(disciplines) {
     div.className = "kq-item " + state;
     const icon = state === "achieved" ? "✓" : state === "not-achieved" ? "✗" : "⟳";
     const label = state === "achieved" ? "Achieved" : state === "not-achieved" ? "Not Achieved" : "Not Started";
-    div.innerHTML = `<span class="kq-name">${d.name}</span>${icon} ${label}<span class="kq-numbers">Plan ${d.dailyPlan.toLocaleString()} / Actual ${d.dailyActual.toLocaleString()}</span>`;
+    div.innerHTML = `<span class="kq-name">${d.name}</span>${icon} ${label}<span class="kq-numbers">Plan ${fmtInt(d.dailyPlan)} / Actual ${fmtInt(d.dailyActual)}</span>`;
     grid.appendChild(div);
   });
   document.getElementById("kqAchieved").textContent = achieved;
@@ -537,7 +543,10 @@ function renderGenericList(tableId, countId, listObj, filteredRows) {
     const tr = document.createElement("tr");
     columns.forEach(c => {
       const td = document.createElement("td");
-      td.textContent = r[c] != null ? r[c] : "";
+      const val = r[c];
+      // A bare "0" in these free-text columns (Due Date, Status, etc.) is just an unfilled
+      // placeholder in the source sheet, not a meaningful value — show it as blank.
+      td.textContent = (val != null && String(val).trim() !== "0") ? val : "";
       tr.appendChild(td);
     });
     tbody.appendChild(tr);
