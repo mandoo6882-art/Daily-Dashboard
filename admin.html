@@ -520,8 +520,24 @@ function parseGenericTableAfterLabel(rows, labelSubstring) {
   return out.length ? out : null;
 }
 
+// Like findLabelRow, but only matches cells that actually start with "■" — every real section
+// title in this sheet does ("■ DAILY KEY ACTIVITIES", "■ PROGRESS Status", etc.), so this avoids
+// false-positive matches inside unrelated free-text cells elsewhere (e.g. Issue/Walkthrough
+// comments) that happen to contain the phrase as a substring.
+function findSectionLabelRow(rows, labelSubstring, maxScanRows) {
+  const target = norm(labelSubstring);
+  const limit = Math.min(rows.length, maxScanRows || rows.length);
+  for (let r = 0; r < limit; r++) {
+    for (let c = 0; c < rows[r].length; c++) {
+      const raw = String(rows[r][c] == null ? "" : rows[r][c]).trim();
+      if (raw.startsWith("■") && norm(raw).includes(target)) return { row: r, col: c };
+    }
+  }
+  return null;
+}
+
 function parseWelderTable(rows) {
-  const loc = findLabelRow(rows, "welder mobilization status");
+  const loc = findSectionLabelRow(rows, "welder mobilization status");
   if (!loc) return null;
 
   let subHeaderRow = -1;
@@ -858,6 +874,34 @@ document.getElementById("debugBtn").addEventListener("click", () => {
   out += `Label search in "${dashSheetName}" (${dashRows.length} total rows):\n`;
   out += `  "welder mobilization status" -> ${welderLoc ? "found at row " + welderLoc.row + ", col " + welderLoc.col : "NOT FOUND"}\n`;
   out += `  "daily key activities" -> ${activitiesLoc ? "found at row " + activitiesLoc.row + ", col " + activitiesLoc.col : "NOT FOUND"}\n\n`;
+
+  // Step-by-step trace of parseWelderTable so we can see exactly where it stops matching,
+  // instead of just a pass/fail message.
+  out += "Welder table parse trace:\n";
+  if (!welderLoc) {
+    out += "  stopped: label not found\n\n";
+  } else {
+    let subHeaderRow = -1;
+    for (let r = welderLoc.row + 1; r < Math.min(welderLoc.row + 10, dashRows.length); r++) {
+      const norms = dashRows[r].map(norm);
+      out += `  row ${r}: [${dashRows[r].map(c => JSON.stringify(String(c))).join(", ")}]\n`;
+      if (norms.includes("plan") && norms.includes("actual")) { subHeaderRow = r; break; }
+    }
+    if (subHeaderRow === -1) {
+      out += "  stopped: no row with both 'Plan' and 'Actual' found within 10 rows below the label\n\n";
+    } else {
+      out += `  subHeaderRow = ${subHeaderRow}\n`;
+      const subRow = dashRows[subHeaderRow];
+      const planCols = [];
+      subRow.forEach((c, i) => { if (norm(c) === "plan") planCols.push(i); });
+      out += `  planCols = [${planCols.join(", ")}]\n`;
+      let dataRow = null, dataRowIdx = -1;
+      for (let r = subHeaderRow + 1; r < Math.min(subHeaderRow + 5, dashRows.length); r++) {
+        if (dashRows[r].some(c => String(c).trim() !== "")) { dataRow = dashRows[r]; dataRowIdx = r; break; }
+      }
+      out += `  dataRow = ${dataRowIdx === -1 ? "NOT FOUND" : "row " + dataRowIdx + " -> [" + dataRow.map(c => JSON.stringify(String(c))).join(", ") + "]"}\n\n`;
+    }
+  }
 
   out += issueSheetName ? dumpSheet(wb, issueSheetName, 25, 15) : '[no "Issue" sheet found]\n\n';
   out += wtSheetName ? dumpSheet(wb, wtSheetName, 25, 15) : '[no "Walkthrough" sheet found]\n\n';
