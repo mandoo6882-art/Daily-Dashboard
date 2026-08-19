@@ -20939,7 +20939,20 @@
       ]
     }
   },
-  "welderStatus": [],
+  "welderStatus": [
+    {
+      "Group": "JCC Received",
+      "Plan": "341",
+      "Actual": "216",
+      "Var.": "-125"
+    },
+    {
+      "Group": "JCC under Approval",
+      "Plan": "32",
+      "Actual": "8",
+      "Var.": "-24"
+    }
+  ],
   "disciplines": [
     {
       "name": "Steel Structure",
