@@ -244,10 +244,13 @@ function renderComboChart(canvasId, key, scrollbarId, dates, planLabel, planData
     data: {
       labels: dates,
       datasets: [
-        { type: "bar", label: planLabel, data: planData, backgroundColor: "#b7bec9", yAxisID: "y", order: 2 },
-        { type: "bar", label: actualLabel, data: actualData, backgroundColor: "#eb8a3d", yAxisID: "y", order: 1 },
-        { type: "line", label: cumPlanLabel, data: cumPlanData, borderColor: "#2a78d6", backgroundColor: "#2a78d6", yAxisID: "y1", tension: 0.2, borderWidth: 2, pointRadius: 1.5, order: 0 },
-        { type: "line", label: cumActualLabel, data: cumActualData, borderColor: "#f0c419", backgroundColor: "#f0c419", yAxisID: "y1", tension: 0.2, borderWidth: 2, pointRadius: 1.5, order: 0 }
+        // Order in this array is what determines left/right position for grouped bars —
+        // Plan first (left), Actual second (right). No "order" property on these two: it
+        // only affects draw/z-order and legend order, not horizontal grouping position.
+        { type: "bar", label: planLabel, data: planData, backgroundColor: "#b7bec9", yAxisID: "y" },
+        { type: "bar", label: actualLabel, data: actualData, backgroundColor: "#eb8a3d", yAxisID: "y" },
+        { type: "line", label: cumPlanLabel, data: cumPlanData, borderColor: "#2a78d6", backgroundColor: "#2a78d6", yAxisID: "y1", tension: 0.2, borderWidth: 2, pointRadius: 1.5 },
+        { type: "line", label: cumActualLabel, data: cumActualData, borderColor: "#f0c419", backgroundColor: "#f0c419", yAxisID: "y1", tension: 0.2, borderWidth: 2, pointRadius: 1.5 }
       ]
     },
     options: {
