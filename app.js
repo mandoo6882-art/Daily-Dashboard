@@ -237,11 +237,15 @@ function renderComboChart(canvasId, key, scrollbarId, dates, planLabel, planData
   destroyChart(key);
   const ctx = document.getElementById(canvasId).getContext("2d");
   charts[key] = new Chart(ctx, {
+    // An explicit top-level type ("bar") is what makes Chart.js group the two bar datasets
+    // side by side (Plan on the left, Actual on the right) instead of overlapping — without
+    // it, a chart built purely from per-dataset types doesn't get the automatic bar grouping.
+    type: "bar",
     data: {
       labels: dates,
       datasets: [
-        { type: "bar", label: planLabel, data: planData, backgroundColor: "#b7bec9", yAxisID: "y", order: 2, barPercentage: 0.9, categoryPercentage: 0.9 },
-        { type: "bar", label: actualLabel, data: actualData, backgroundColor: "#eb8a3d", yAxisID: "y", order: 1, barPercentage: 0.9, categoryPercentage: 0.9 },
+        { type: "bar", label: planLabel, data: planData, backgroundColor: "#b7bec9", yAxisID: "y", order: 2 },
+        { type: "bar", label: actualLabel, data: actualData, backgroundColor: "#eb8a3d", yAxisID: "y", order: 1 },
         { type: "line", label: cumPlanLabel, data: cumPlanData, borderColor: "#2a78d6", backgroundColor: "#2a78d6", yAxisID: "y1", tension: 0.2, borderWidth: 2, pointRadius: 1.5, order: 0 },
         { type: "line", label: cumActualLabel, data: cumActualData, borderColor: "#f0c419", backgroundColor: "#f0c419", yAxisID: "y1", tension: 0.2, borderWidth: 2, pointRadius: 1.5, order: 0 }
       ]
@@ -250,11 +254,14 @@ function renderComboChart(canvasId, key, scrollbarId, dates, planLabel, planData
       responsive: true,
       maintainAspectRatio: false,
       animation: false,
-      plugins: { legend: { position: "top", labels: { boxWidth: 10, font: { size: 10 } } } },
+      plugins: {
+        legend: { position: "top", labels: { boxWidth: 10, font: { size: 10 } } },
+        tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${Math.round(ctx.parsed.y).toLocaleString()}` } }
+      },
       scales: {
         x: { type: "category", ticks: { font: { size: 9 }, maxRotation: 60, minRotation: 0 } },
-        y: { position: "left", beginAtZero: true, title: { display: true, text: leftAxisTitle, font: { size: 10 } }, ticks: { font: { size: 9 } } },
-        y1: { position: "right", beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: rightAxisTitle, font: { size: 10 } }, ticks: { font: { size: 9 } } }
+        y: { position: "left", beginAtZero: true, title: { display: true, text: leftAxisTitle, font: { size: 10 } }, ticks: { font: { size: 9 }, callback: (v) => Math.round(v).toLocaleString() } },
+        y1: { position: "right", beginAtZero: true, grid: { drawOnChartArea: false }, title: { display: true, text: rightAxisTitle, font: { size: 10 } }, ticks: { font: { size: 9 }, callback: (v) => Math.round(v).toLocaleString() } }
       }
     }
   });
