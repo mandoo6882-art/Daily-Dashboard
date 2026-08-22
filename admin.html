@@ -119,9 +119,18 @@ function parseProjectInfo(rows) {
     for (let c = 0; c < row.length; c++) {
       const t = norm(row[c]);
       if (t.includes("cut-off date") || t.includes("cut off date") || t.includes("cutoff date")) {
-        const cutoff = formatMaybeExcelDateText(row[c + 1]);
-        const categories = String(row[c + 2] == null ? "" : row[c + 2]).trim();
-        if (cutoff) return { cutoff, categories };
+        // The label only appears once, but the Dashboard sheet can list more than one
+        // cut-off line stacked underneath it (same two columns: date, categories) without
+        // repeating the label — keep reading rows while that pattern continues.
+        const lines = [];
+        for (let rr = r; rr < rows.length; rr++) {
+          const rowN = rows[rr] || [];
+          const cutoff = formatMaybeExcelDateText(rowN[c + 1]);
+          if (!cutoff) break;
+          const categories = String(rowN[c + 2] == null ? "" : rowN[c + 2]).trim();
+          lines.push({ cutoff, categories });
+        }
+        if (lines.length) return { cutoff: lines[0].cutoff, categories: lines[0].categories, lines };
       }
     }
   }
@@ -814,7 +823,7 @@ document.getElementById("fileInput").addEventListener("change", async (e) => {
       walkthroughList: walkthroughList || (previous && previous.walkthroughList) || []
     };
 
-    if (projectInfo) addMsg(`Cut-off Date: ${projectInfo.cutoff} 인식 완료`, "ok");
+    if (projectInfo) addMsg(`Cut-off Date: ${(projectInfo.lines || [projectInfo]).map(l => l.cutoff).join(", ")} 인식 완료`, "ok");
     else addMsg("Cut-off Date를 찾지 못했습니다. 이전 값을 유지합니다.", "warn");
     if (!disciplines) addMsg("Progress Status는 이전 data.json 값을 그대로 유지했습니다.", "warn");
     if (!issueSummary) addMsg("Issue 요약은 이전 data.json 값을 그대로 유지했습니다.", "warn");

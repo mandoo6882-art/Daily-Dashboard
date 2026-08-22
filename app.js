@@ -90,7 +90,11 @@ function effectiveStatus(d) {
 
 function renderProjectInfo(data) {
   const p = (data && data.projectInfo) || CONFIG.PROJECT_INFO || {};
-  document.getElementById("projectInfo").textContent = `Cut-off: ${p.cutoff || "--"} | ${p.categories || ""}`;
+  // The Dashboard sheet can list more than one cut-off line (e.g. a later cutoff for most
+  // disciplines plus an earlier one for a discipline whose data lags) — show every line found.
+  const lines = (p.lines && p.lines.length) ? p.lines : [{ cutoff: p.cutoff, categories: p.categories }];
+  document.getElementById("projectInfo").innerHTML =
+    lines.map(l => `Cut-off: ${l.cutoff || "--"} | ${l.categories || ""}`).join("<br>");
 }
 
 function populateSelector(disciplines) {
