@@ -65,9 +65,27 @@ function statusClass(status) {
 }
 
 function achievementOf(d) {
-  if (!d.dailyPlan || d.dailyPlan === 0) return "not-started";
-  if (d.dailyActual >= d.dailyPlan) return "achieved";
-  return "not-achieved";
+  if (d.dailyPlan && d.dailyPlan > 0) {
+    return d.dailyActual >= d.dailyPlan ? "achieved" : "not-achieved";
+  }
+  // No daily target today doesn't necessarily mean the item hasn't started — if there's
+  // already cumulative plan in progress, judge it against cumulative Plan/Actual instead of
+  // marking it "Not Started". Only truly untouched items (no cumulative plan either) are.
+  if (d.cumPlan && d.cumPlan > 0) {
+    return d.cumActual >= d.cumPlan ? "achieved" : "not-achieved";
+  }
+  return "not-started";
+}
+
+// The Excel "Status" column (Ahead/Behind/Yet) can read "Yet" (not started) simply because
+// there's no daily plan scheduled today — even when the item already has cumulative plan/
+// actual in progress. Since the badge is labeled "Cumulative Status up to Today", recompute
+// from cumulative Plan/Actual in that specific case instead of trusting the raw "Yet" text.
+function effectiveStatus(d) {
+  if (d.status === "Yet" && (!d.dailyPlan || d.dailyPlan === 0) && d.cumPlan > 0) {
+    return d.cumActual >= d.cumPlan ? "Ahead" : "Behind";
+  }
+  return d.status;
 }
 
 function renderProjectInfo(data) {
@@ -131,9 +149,10 @@ function renderSelectedDiscipline() {
   document.getElementById("kpiMpActual").textContent = fmtInt(d.mpActual);
   document.getElementById("kpiMpPlan").textContent = fmtInt(d.mpPlan);
 
+  const status = effectiveStatus(d);
   const badge = document.getElementById("kpiStatusBadge");
-  badge.textContent = d.status;
-  badge.className = "badge " + statusClass(d.status);
+  badge.textContent = status;
+  badge.className = "badge " + statusClass(status);
 
   document.getElementById("sTotal").textContent = fmtInt(d.total);
   document.getElementById("sCompleted").textContent = fmtInt(d.completed);
@@ -471,6 +490,7 @@ function renderProgressTable(disciplines) {
   const tbody = document.querySelector("#progressTable tbody");
   tbody.innerHTML = "";
   disciplines.forEach(d => {
+    const status = effectiveStatus(d);
     const tr = document.createElement("tr");
     tr.innerHTML = `
       <td>${d.name}</td>
@@ -485,7 +505,7 @@ function renderProgressTable(disciplines) {
       <td>${fmtInt(d.cumVar)}</td>
       <td>${fmtInt(d.mpPlan)}</td>
       <td>${fmtInt(d.mpActual)}</td>
-      <td><span class="badge ${statusClass(d.status)}">${d.status}</span></td>
+      <td><span class="badge ${statusClass(status)}">${status}</span></td>
     `;
     tbody.appendChild(tr);
   });
